@@ -6,6 +6,7 @@ import type { ServerEvent } from "@/contracts/generated/turn-protocol";
 import type { TurnRuntimeClientOptions } from "@/features/chat/transport/TurnRuntimeClient";
 import { ChatStateAdapterProvider, useChatStateAdapter } from "@/features/chat/ChatStateAdapter";
 import { initI18n } from "@/i18n/init";
+import { buildVisiblePath } from "@/lib/message-branches";
 
 initI18n("en");
 const transport = vi.hoisted(() => ({ emit: (_event: ServerEvent) => {}, sent: [] as string[] }));
@@ -28,9 +29,13 @@ function Harness() {
   }, []);
   return <div>
     <span data-testid="streaming">{String(chat.state.isStreaming)}</span>
-    <div data-testid="transcript">{chat.state.messages.map(m => m.content).join("\n")}</div>
+    <div data-testid="transcript">{buildVisiblePath(chat.state.messages, {}).messages.map(m => m.content).join("\n")}</div>
     <button onClick={() => chat.sendMessage("Read the attachment")}>Start</button>
     <button onClick={() => chat.regenerateLastMessage()}>Regenerate</button>
+    <button onClick={() => {
+      chat.regenerateLastMessage();
+      chat.regenerateLastMessage();
+    }}>Regenerate twice</button>
   </div>;
 }
 
@@ -49,7 +54,9 @@ it("restores the old answer and stops Thinking after the wire rejects regenerati
   });
   await waitFor(() => expect(screen.getByTestId("streaming")).toHaveTextContent("false"));
   expect(screen.getByTestId("transcript")).toHaveTextContent("Original answer");
-  await user.click(screen.getByText("Regenerate"));
+  const sentBefore = transport.sent.length;
+  await user.click(screen.getByText("Regenerate twice"));
+  expect(transport.sent.slice(sentBefore)).toEqual(["regenerate"]);
   expect(transport.sent.at(-1)).toBe("regenerate");
   expect(screen.getByTestId("streaming")).toHaveTextContent("true");
   expect(screen.getByTestId("transcript")).not.toHaveTextContent("Original answer");
@@ -60,4 +67,8 @@ it("restores the old answer and stops Thinking after the wire rejects regenerati
   await act(async () => { transport.emit({ ...rejection, session_id: "s1" }); });
   expect(screen.getByTestId("streaming")).toHaveTextContent("false");
   expect(screen.getByTestId("transcript")).toHaveTextContent("Original answer");
+  // A rejected request must release the guard so the learner can retry.
+  const retryBefore = transport.sent.length;
+  await user.click(screen.getByText("Regenerate twice"));
+  expect(transport.sent.slice(retryBefore)).toEqual(["regenerate"]);
 });

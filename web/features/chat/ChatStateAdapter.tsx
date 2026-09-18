@@ -1502,6 +1502,9 @@ export function ChatStateAdapterProvider({
   // assistant message if the server rejects the request (e.g. ``regenerate_busy``
   // or ``nothing_to_regenerate``). Keyed by session entry key.
   const pendingRegenerateRef = useRef<Map<string, MessageItem>>(new Map());
+  // Guards ``regenerateLastMessage`` against double-submits within the same
+  // React tick (before ``isStreaming`` flips). Keyed by session entry key.
+  const regenerateInFlightRef = useRef<Set<string>>(new Set());
   const traceCacheRef = useRef<TraceCache>(new TraceCache());
   const traceRequestsRef = useRef<Map<string, AbortController>>(new Map());
   // Forward-declared so ``handleRunnerEvent`` (created above
@@ -1700,6 +1703,7 @@ export function ChatStateAdapterProvider({
           turnId: event.turn_id || null,
         });
         pendingRegenerateRef.current.delete(effectiveKey);
+        regenerateInFlightRef.current.delete(effectiveKey);
         const runner = runnersRef.current.get(effectiveKey);
         // Hold the WS open briefly so post-turn ``session_meta`` events
         // (e.g. the LLM-generated title for the first user/assistant
@@ -1765,7 +1769,11 @@ export function ChatStateAdapterProvider({
         }
         return;
       }
-      dispatch({ type: "STREAM_EVENT", key: effectiveKey, event });
+      // Pre-flight regenerate rejections never mutate server state, so we
+      // roll back the optimistic POP_LAST_ASSISTANT/STREAM_START placeholder
+      // *before* appending the error event — otherwise the optimistic
+      // assistant row (with the error event pushed onto it) outranks the
+      // restored stash in ``buildVisiblePath`` and hides the original answer.
       if (
         event.type === "error" &&
         Boolean(
@@ -1776,9 +1784,6 @@ export function ChatStateAdapterProvider({
         const reason = String(
           (event.metadata as { reason?: string } | undefined)?.reason || "",
         );
-        // Pre-flight regenerate rejections never mutate server state, so we
-        // roll back the optimistic POP_LAST_ASSISTANT/STREAM_START placeholder
-        // to keep the transcript in sync with the server.
         if (
           reason === "regenerate_busy" ||
           reason === "nothing_to_regenerate" ||
@@ -1793,7 +1798,17 @@ export function ChatStateAdapterProvider({
             });
           }
         }
+      }
+      dispatch({ type: "STREAM_EVENT", key: effectiveKey, event });
+      if (
+        event.type === "error" &&
+        Boolean(
+          (event.metadata as { turn_terminal?: boolean } | undefined)
+            ?.turn_terminal,
+        )
+      ) {
         pendingRegenerateRef.current.delete(effectiveKey);
+        regenerateInFlightRef.current.delete(effectiveKey);
         const status = String(
           (event.metadata as { status?: string } | undefined)?.status ||
             "failed",
@@ -2549,6 +2564,8 @@ export function ChatStateAdapterProvider({
     const session = currentState.sessions[key];
     if (!session || !session.sessionId) return;
     if (session.isStreaming) return;
+    if (regenerateInFlightRef.current.has(key)) return;
+    regenerateInFlightRef.current.add(key);
     const lastUser = [...session.messages]
       .reverse()
       .find((m) => m.role === "user");

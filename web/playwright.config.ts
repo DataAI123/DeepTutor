@@ -25,6 +25,7 @@ export default defineConfig({
         "**/epub-reader.audit.ts",
         "**/e2e/turn-lifecycle.audit.ts",
         "**/e2e/multi-worker-turns.audit.ts",
+        "**/e2e/p0-regressions.audit.ts",
       ],
       use: { ...devices["Desktop Chrome"] },
     },
@@ -32,6 +33,11 @@ export default defineConfig({
       name: "critical-turns",
       testMatch: "**/e2e/turn-lifecycle.audit.ts",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "p0-regressions",
+      testMatch: "**/e2e/p0-regressions.audit.ts",
+      use: { ...devices["Desktop Chrome"], reducedMotion: "reduce" },
     },
     {
       name: "multi-worker-turns-desktop",
