@@ -130,6 +130,19 @@ def _log(message: str) -> None:
     print(message, flush=True)
 
 
+def _log_remediation(*keys: str) -> None:
+    """Print copy-pasteable fixes with the failing start-up report (#1501).
+
+    A bare "did not become ready" left a first-time user with nothing to do on
+    a windowless launch, where there is no console scrollback to investigate.
+    """
+    if not keys:
+        return
+    _log(_t("start.remedy_header"))
+    for key in keys:
+        _log(_t(key))
+
+
 def _reset_runtime_singletons() -> None:
     """Make a just-selected DEEPTUTOR_HOME visible to path/config singletons."""
     try:
@@ -264,7 +277,14 @@ def _stream_output(prefix: str, process: subprocess.Popen[str]) -> None:
         print(f"  {prefix:<8} {line.rstrip()}", flush=True)
 
 
-def _spawn(command: list[str], *, cwd: Path, env: dict[str, str], name: str) -> ManagedProcess:
+def _spawn(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    name: str,
+    windowless: bool = False,
+) -> ManagedProcess:
     kwargs: dict[str, object] = {
         "cwd": str(cwd),
         "env": env,
@@ -276,7 +296,13 @@ def _spawn(command: list[str], *, cwd: Path, env: dict[str, str], name: str) -> 
         "errors": "replace",
     }
     if os.name == "nt":
-        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+        if windowless:
+            # A detached worker has no console of its own, so Windows hands
+            # every console-subsystem child a brand new one unless we say
+            # otherwise -- the source of the flashing black windows (#1501).
+            creationflags |= subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+        kwargs["creationflags"] = creationflags
     else:
         kwargs["start_new_session"] = True
     process = subprocess.Popen(command, **kwargs)  # type: ignore[arg-type,call-overload]
@@ -515,6 +541,7 @@ def _resolve_port_conflicts(
 
         if sys.stdin is None or not sys.stdin.isatty():
             joined = ", ".join(str(port) for _key, port in occupied)
+            _log_remediation("start.remedy_port_in_use")
             raise SystemExit(_t("start.port_in_use", ports=joined))
 
         if _prompt_conflict_choice() == "1":
@@ -536,6 +563,7 @@ def _wait_for_http(
     timeout: int,
     env_name: str,
     should_stop: Callable[[], bool],
+    remedies: tuple[str, ...] = (),
 ) -> None:
     _log(_t("start.waiting_for", name=name, url=url))
     deadline = time.monotonic() + timeout
@@ -543,6 +571,7 @@ def _wait_for_http(
         if should_stop():
             return
         if process is not None and process.process.poll() is not None:
+            _log_remediation(*remedies)
             raise RuntimeError(_t("start.exited", name=name, code=process.process.returncode))
         try:
             with urlrequest.urlopen(url, timeout=1):  # noqa: S310  # nosec B310 - http(s) health-check URL constructed by caller
@@ -550,6 +579,7 @@ def _wait_for_http(
                 return
         except (urlerror.URLError, TimeoutError, OSError):
             time.sleep(0.5)
+    _log_remediation(*remedies)
     raise RuntimeError(_t("start.not_ready", name=name, timeout=timeout, env=env_name))
 
 
@@ -1084,6 +1114,7 @@ def _launch_detached(
         kwargs["creationflags"] = (
             subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
             | subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
+            | subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
         )
     else:
         kwargs["start_new_session"] = True
@@ -1453,7 +1484,13 @@ def start(
 
     try:
         _log(_t("start.starting_backend"))
-        backend = _spawn(backend_cmd, cwd=runtime_home, env=common_env, name="backend")
+        backend = _spawn(
+            backend_cmd,
+            cwd=runtime_home,
+            env=common_env,
+            name="backend",
+            windowless=detached_worker,
+        )
         processes.append(backend)
         _wait_for_http(
             name=_t("start.backend"),
@@ -1462,6 +1499,7 @@ def start(
             timeout=BACKEND_READY_TIMEOUT,
             env_name=BACKEND_READY_TIMEOUT_ENV,
             should_stop=should_stop,
+            remedies=("start.remedy_parser_models", "start.remedy_log"),
         )
         if should_stop():
             return
@@ -1476,10 +1514,17 @@ def start(
                 timeout=FRONTEND_READY_TIMEOUT,
                 env_name=FRONTEND_READY_TIMEOUT_ENV,
                 should_stop=should_stop,
+                remedies=("start.remedy_frontend", "start.remedy_log"),
             )
         else:
             _log(_t("start.starting_frontend"))
-            web = _spawn(frontend.command, cwd=frontend.cwd, env=common_env, name="frontend")
+            web = _spawn(
+                frontend.command,
+                cwd=frontend.cwd,
+                env=common_env,
+                name="frontend",
+                windowless=detached_worker,
+            )
             processes.append(web)
             _wait_for_http(
                 name=_t("start.frontend"),
@@ -1488,6 +1533,7 @@ def start(
                 timeout=FRONTEND_READY_TIMEOUT,
                 env_name=FRONTEND_READY_TIMEOUT_ENV,
                 should_stop=should_stop,
+                remedies=("start.remedy_frontend", "start.remedy_log"),
             )
         if should_stop():
             return

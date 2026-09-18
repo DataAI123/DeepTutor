@@ -543,10 +543,11 @@ def test_start_uses_ipv4_loopback_for_frontend_proxy(
     monkeypatch.setattr(launcher, "_wait_for_http", lambda **_kwargs: None)
     monkeypatch.setattr(launcher, "_terminate", lambda _process: None)
 
-    def _capture_spawn(_command, *, cwd, env, name):
+    def _capture_spawn(_command, *, cwd, env, name, windowless):
         assert cwd == tmp_path
         captured_envs[name] = dict(env)
         if name == "backend":
+            assert windowless is True
             return launcher.ManagedProcess("backend", object(), None)
         assert name == "frontend"
         raise RuntimeError("captured launch environment")
@@ -659,6 +660,7 @@ def test_launch_detached_uses_a_separate_windows_process_group(
     monkeypatch.setattr(launcher.sys, "platform", "win32")
     monkeypatch.setattr(launcher.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, raising=False)
     monkeypatch.setattr(launcher.subprocess, "DETACHED_PROCESS", 0x8, raising=False)
+    monkeypatch.setattr(launcher.subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False)
     monkeypatch.setattr(launcher.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(launcher, "_log", lambda _message: None)
 
@@ -673,10 +675,56 @@ def test_launch_detached_uses_a_separate_windows_process_group(
     assert captured["command"][-2:] == ["--dev", "--no-browser"]
     kwargs = captured["kwargs"]
     assert isinstance(kwargs, dict)
-    assert kwargs["creationflags"] == 0x208
+    assert kwargs["creationflags"] == 0x208 | 0x08000000
     assert kwargs["env"][launcher.DETACHED_WORKER_ENV] == "1"
     assert kwargs["env"][launcher.DETACHED_TOKEN_ENV] == state["token"]
     assert captured["log_name"] == str(paths.log)
+
+
+def test_spawn_suppresses_a_new_console_only_when_windowless(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """A detached worker owns no console, so its children each opened one (#1501).
+
+    ``CREATE_NEW_PROCESS_GROUP`` on its own left the backend and the frontend
+    dev server popping a fresh black window whenever the worker (which has no
+    console after ``DETACHED_PROCESS``) attached them; the flag has to be paired
+    with ``CREATE_NO_WINDOW`` while the foreground start stays visible.
+    """
+    captured: dict[str, object] = {}
+
+    class _Process:
+        pid = 4242
+
+    class _InertThread:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def start(self) -> None:
+            pass
+
+    def fake_popen(_command, **kwargs):
+        captured["kwargs"] = kwargs
+        return _Process()
+
+    monkeypatch.setattr(launcher.os, "name", "nt")
+    monkeypatch.setattr(launcher.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, raising=False)
+    monkeypatch.setattr(launcher.subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False)
+    monkeypatch.setattr(launcher.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(launcher.threading, "Thread", _InertThread)
+
+    launcher._spawn(["python", "-c", "pass"], cwd=tmp_path, env={}, name="backend")
+    assert captured["kwargs"]["creationflags"] == 0x200
+
+    launcher._spawn(
+        ["python", "-c", "pass"],
+        cwd=tmp_path,
+        env={},
+        name="backend",
+        windowless=True,
+    )
+    assert captured["kwargs"]["creationflags"] == 0x200 | 0x08000000
 
 
 def test_stop_requests_only_the_registered_detached_launcher(

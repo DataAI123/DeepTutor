@@ -12,6 +12,7 @@ from deeptutor.services.doctor import (
     DoctorReport,
     run_diagnostics,
     run_runtime_diagnostics,
+    run_startup_diagnostics,
 )
 
 from .common import console
@@ -44,7 +45,10 @@ def register(app: typer.Typer) -> None:
     def doctor(
         target: str | None = typer.Argument(
             None,
-            help="Optional diagnostic target; use 'runtime' for v2 coordination/storage.",
+            help=(
+                "Optional diagnostic target; use 'startup' for first-launch readiness "
+                "or 'runtime' for v2 coordination/storage."
+            ),
         ),
         online: bool = typer.Option(
             False,
@@ -62,11 +66,14 @@ def register(app: typer.Typer) -> None:
         if fmt not in {"rich", "json"}:
             raise typer.BadParameter("must be 'rich' or 'json'", param_hint="--format")
 
-        if target not in {None, "runtime"}:
-            raise typer.BadParameter("must be 'runtime'", param_hint="target")
-        report = asyncio.run(
-            run_runtime_diagnostics() if target == "runtime" else run_diagnostics(online=online)
-        )
+        if target not in {None, "startup", "runtime"}:
+            raise typer.BadParameter("must be 'startup' or 'runtime'", param_hint="target")
+        if target == "startup":
+            report = asyncio.run(run_startup_diagnostics())
+        elif target == "runtime":
+            report = asyncio.run(run_runtime_diagnostics())
+        else:
+            report = asyncio.run(run_diagnostics(online=online))
         if fmt == "json":
             console.print_json(json.dumps(report.to_dict()))
         else:

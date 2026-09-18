@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +14,7 @@ from deeptutor.services.doctor import (
     DoctorReport,
     _rag_check,
     run_diagnostics,
+    run_startup_diagnostics,
 )
 from deeptutor_cli.main import app
 
@@ -496,3 +498,241 @@ def test_doctor_online_rich_output_succeeds(monkeypatch) -> None:
     assert result.exit_code == 0, result.output
     assert "PASS" in result.output
     assert "Provider response" in result.output
+
+
+def _ready_launch_settings(**overrides):
+    values = {"backend_port": 8001, "frontend_port": 3782, "source": "defaults"}
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+async def _run_startup(**overrides) -> DoctorReport:
+    kwargs = {
+        "home": Path("/tmp/deeptutor"),
+        "launch_settings": _ready_launch_settings(),
+        "http_ready": lambda url: False,
+        "port_in_use": lambda port: False,
+        "port_listeners": lambda port: [],
+        "module_available": lambda name: True,
+        "which": lambda name: "/usr/bin/" + name,
+        "local_web": lambda home: ("packaged", Path("/opt/deeptutor_web")),
+        "parser_readiness": lambda: {"engine": "mineru", "ready": True, "reason": ""},
+    }
+    kwargs.update(overrides)
+    return await run_startup_diagnostics(**kwargs)
+
+
+@pytest.mark.asyncio
+async def test_startup_diagnostics_reports_ready_when_everything_is_present() -> None:
+    report = await _run_startup()
+
+    assert report.ok is True
+    assert report.online is False
+    assert {check.key: check.status for check in report.checks} == {
+        "backend": "pass",
+        "frontend": "pass",
+        "ports": "pass",
+        "parser": "pass",
+    }
+
+
+@pytest.mark.asyncio
+async def test_startup_diagnostics_notes_already_running_backend() -> None:
+    report = await _run_startup(http_ready=lambda url: True)
+
+    backend = next(check for check in report.checks if check.key == "backend")
+    assert backend.status == "pass"
+    assert "http://127.0.0.1:8001/" in backend.detail
+
+
+@pytest.mark.asyncio
+async def test_startup_diagnostics_flags_missing_backend_dependency() -> None:
+    report = await _run_startup(module_available=lambda name: name != "uvicorn")
+
+    assert report.ok is False
+    backend = next(check for check in report.checks if check.key == "backend")
+    assert backend.status == "fail"
+    assert "uvicorn" in backend.detail
+
+
+@pytest.mark.asyncio
+async def test_startup_diagnostics_flags_occupied_port_with_listener() -> None:
+    report = await _run_startup(
+        port_in_use=lambda port: port == 8001,
+        port_listeners=lambda port: [(4321, "python.exe")],
+    )
+
+    assert report.ok is False
+    ports = next(check for check in report.checks if check.key == "ports")
+    assert ports.status == "fail"
+    assert ports.required is True
+    assert "pid 4321 (python.exe)" in ports.detail
+    assert "netstat" in ports.detail
+
+
+@pytest.mark.asyncio
+async def test_startup_diagnostics_flags_duplicate_ports() -> None:
+    report = await _run_startup(
+        launch_settings=_ready_launch_settings(frontend_port=8001),
+    )
+
+    ports = next(check for check in report.checks if check.key == "ports")
+    assert ports.status == "fail"
+    assert "both use port 8001" in ports.detail
+
+
+@pytest.mark.asyncio
+async def test_startup_diagnostics_flags_missing_web_assets() -> None:
+    report = await _run_startup(local_web=lambda home: None)
+
+    assert report.ok is False
+    frontend = next(check for check in report.checks if check.key == "frontend")
+    assert frontend.status == "fail"
+    assert frontend.required is True
+
+
+@pytest.mark.asyncio
+async def test_startup_diagnostics_flags_missing_node() -> None:
+    report = await _run_startup(which=lambda name: None)
+
+    frontend = next(check for check in report.checks if check.key == "frontend")
+    assert frontend.status == "fail"
+    assert "nodejs.org" in frontend.detail
+
+
+@pytest.mark.asyncio
+async def test_startup_diagnostics_flags_missing_npm_for_source_frontend() -> None:
+    report = await _run_startup(
+        local_web=lambda home: ("source", Path("/repo/web")),
+        which=lambda name: None if name == "npm" else "/usr/bin/node",
+    )
+
+    frontend = next(check for check in report.checks if check.key == "frontend")
+    assert frontend.status == "fail"
+    assert "npm install" in frontend.detail
+
+
+@pytest.mark.asyncio
+async def test_startup_diagnostics_parser_missing_models_is_advisory() -> None:
+    report = await _run_startup(
+        parser_readiness=lambda: {"engine": "mineru", "ready": False, "reason": "models_missing"},
+    )
+
+    parser = next(check for check in report.checks if check.key == "parser")
+    assert parser.status == "fail"
+    assert parser.required is False
+    assert "mineru[all]" in parser.detail
+    assert report.ok is True
+
+
+@pytest.mark.asyncio
+async def test_startup_diagnostics_parser_skips_without_engine() -> None:
+    report = await _run_startup(
+        parser_readiness=lambda: {"engine": "", "ready": False, "reason": "not_configured"},
+    )
+
+    parser = next(check for check in report.checks if check.key == "parser")
+    assert parser.status == "skip"
+    assert parser.required is False
+    assert report.ok is True
+
+
+@pytest.mark.asyncio
+async def test_startup_diagnostics_parser_unknown_reason_uses_fallback_hint() -> None:
+    report = await _run_startup(
+        parser_readiness=lambda: {"engine": "docling", "ready": False, "reason": "mystery"},
+    )
+
+    parser = next(check for check in report.checks if check.key == "parser")
+    assert parser.status == "fail"
+    assert "Open Settings -> Document Parsing" in parser.detail
+
+
+@pytest.mark.asyncio
+async def test_startup_diagnostics_contains_probe_exception() -> None:
+    def boom() -> dict:
+        raise RuntimeError("parser probe exploded")
+
+    report = await _run_startup(parser_readiness=boom)
+
+    parser = next(check for check in report.checks if check.key == "parser")
+    assert parser.status == "fail"
+    assert parser.required is False
+    assert "parser probe exploded" in parser.detail
+    assert report.ok is True
+
+
+def test_doctor_startup_rich_output_lists_readiness(monkeypatch) -> None:
+    async def fake_run_startup_diagnostics():
+        return DoctorReport(
+            online=False,
+            checks=[
+                DoctorCheck(
+                    key="backend",
+                    label="Backend service",
+                    status="pass",
+                    detail="Ready.",
+                ),
+                DoctorCheck(
+                    key="parser",
+                    label="Document parser",
+                    status="fail",
+                    detail="mineru is not ready (models_missing).",
+                    required=False,
+                ),
+            ],
+        )
+
+    monkeypatch.setattr(
+        "deeptutor_cli.doctor.run_startup_diagnostics", fake_run_startup_diagnostics
+    )
+
+    result = runner.invoke(app, ["doctor", "startup"])
+
+    assert result.exit_code == 0, result.output
+    assert "PASS" in result.output
+    assert "WARN" in result.output
+    assert "Document parser" in result.output
+
+
+def test_doctor_startup_json_exits_nonzero_for_required_failure(monkeypatch) -> None:
+    async def fake_run_startup_diagnostics():
+        return DoctorReport(
+            online=False,
+            checks=[
+                DoctorCheck(
+                    key="ports",
+                    label="Service ports",
+                    status="fail",
+                    detail="Backend port 8001 is held by pid 4321 (python.exe).",
+                )
+            ],
+        )
+
+    monkeypatch.setattr(
+        "deeptutor_cli.doctor.run_startup_diagnostics", fake_run_startup_diagnostics
+    )
+
+    result = runner.invoke(app, ["doctor", "startup", "--format", "json"])
+
+    assert result.exit_code == 1, result.output
+    assert json.loads(result.output) == {
+        "ok": False,
+        "online": False,
+        "checks": [
+            {
+                "key": "ports",
+                "label": "Service ports",
+                "status": "fail",
+                "detail": "Backend port 8001 is held by pid 4321 (python.exe).",
+                "required": True,
+            }
+        ],
+    }
+
+
+def test_doctor_rejects_unknown_target() -> None:
+    result = runner.invoke(app, ["doctor", "bogus"])
+
+    assert result.exit_code == 2, result.output
+    assert "startup" in result.output

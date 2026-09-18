@@ -142,6 +142,29 @@ LABELS: dict[str, dict[str, str]] = {
         "start.port_killing": "Stopping PID {pid} ({command}) ...",
         "start.port_kill_failed": "Could not free port {port} (PID {pid}).",
         "start.port_freed": "Port {port} released.",
+        # Remediation appended to a failed first launch (#1501). A detached
+        # worker has no console, so "did not become ready" used to be the whole
+        # story -- every entry here is a command the user can copy and run.
+        "start.remedy_header": "Suggested fixes:",
+        "start.remedy_port_in_use": (
+            "Free the port and retry: run `deeptutor stop` if a previous DeepTutor "
+            "is still running, or on Windows find the owner with "
+            "`netstat -ano | findstr :8001` and end it with `taskkill /PID <pid> /F`. "
+            "To move DeepTutor to different ports, edit data/user/settings/system.json."
+        ),
+        "start.remedy_parser_models": (
+            "If the document parser could not load, its models may be missing: open "
+            'Settings -> "Document Parsing" and click "Download models", or run '
+            "`pip install -U \"mineru[all]>=3.4.5\"`."
+        ),
+        "start.remedy_frontend": (
+            "If the web UI never came up, rebuild it once and retry: "
+            "`cd web && npm install && npm run build`."
+        ),
+        "start.remedy_log": (
+            "For the full error, re-run `deeptutor start` in a terminal, or read "
+            "data/user/runtime/launcher.log when the launch was detached."
+        ),
     },
     "zh": {
         "tagline": "智能体原生的个性化辅导",
@@ -260,6 +283,28 @@ LABELS: dict[str, dict[str, str]] = {
         "start.port_killing": "正在停止 PID {pid} ({command}) ...",
         "start.port_kill_failed": "无法释放端口 {port} (PID {pid})。",
         "start.port_freed": "端口 {port} 已释放。",
+        # 首次启动失败时追加的修复建议 (#1501)。无窗启动没有控制台回滚,所以
+        # 只有"未就绪"远远不够——这里的每条建议都可以直接复制执行。
+        "start.remedy_header": "可尝试的修复方式:",
+        "start.remedy_port_in_use": (
+            "先释放端口再重试: 如果还有旧的 DeepTutor 在运行,执行 `deeptutor stop`;"
+            "Windows 下可用 `netstat -ano | findstr :8001` 找到占用进程,"
+            "再用 `taskkill /PID <pid> /F` 结束它。"
+            "如需更换端口,请修改 data/user/settings/system.json。"
+        ),
+        "start.remedy_parser_models": (
+            "如果启动失败是因为文档解析器无法加载,可能是模型未下载:"
+            "在 设置 -> 文档解析 中点击 下载模型,"
+            "或执行 `pip install -U \"mineru[all]>=3.4.5\"`。"
+        ),
+        "start.remedy_frontend": (
+            "如果前端页面始终未就绪,请先重新构建一次再重试: "
+            "`cd web && npm install && npm run build`。"
+        ),
+        "start.remedy_log": (
+            "查看完整报错: 在终端重新执行 `deeptutor start`,"
+            "或查看后台启动日志 data/user/runtime/launcher.log。"
+        ),
     },
 }
 
