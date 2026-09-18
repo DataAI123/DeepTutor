@@ -648,6 +648,30 @@ class _SearchStub:
 
 
 class TestPipelineSearch:
+    @pytest.mark.parametrize(
+        "documents,status",
+        [([], "no_hits"), ([{"media_id": "m1", "title": "Only a title"}], "insufficient_content")],
+    )
+    def test_no_evidence_is_explicit(self, tmp_path, documents, status):
+        base = _kb_config(
+            tmp_path,
+            {
+                "type": "ima",
+                "client_id": "cid",
+                "api_key": "key",
+                "knowledge_base_id": "kb-1",
+            },
+        )
+        stub = _SearchStub(documents)
+        result = asyncio.run(
+            ImaPipeline(kb_base_dir=base, client_factory=lambda _c: stub).search("q", "IMA")
+        )
+        assert result["retrieval_status"] == status
+        assert result["evidence_chars"] == 0
+        assert result["source_count"] == len(documents)
+        assert result["answer"].strip()
+        assert "Do not" in result["answer"]
+
     def test_search_shapes_snippets_into_context_and_sources(self, tmp_path) -> None:
         base = _kb_config(
             tmp_path,

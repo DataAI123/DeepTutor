@@ -84,12 +84,28 @@ class ImaPipeline:
         sources = source_policy.documents_to_sources(page.documents)
         await self._hydrate(client, sources)
         content = source_policy.render_context(sources)
+        evidence_chars = sum(len(str(source.get("content") or "").strip()) for source in sources)
+        status = "ok" if evidence_chars else ("insufficient_content" if sources else "no_hits")
+        answer = content
+        if status == "no_hits":
+            answer = (
+                "No matching documents were returned by the IMA knowledge base. "
+                "Do not claim this query is supported by the textbook; try a more specific query."
+            )
+        elif status == "insufficient_content":
+            answer = (
+                "IMA returned references but no usable document text. "
+                "Do not treat titles alone as evidence for an answer.\n\n" + content
+            )
         return {
             "query": query,
-            "answer": content,
+            "answer": answer,
             "content": content,
             "sources": sources,
             "provider": PROVIDER,
+            "retrieval_status": status,
+            "source_count": len(sources),
+            "evidence_chars": evidence_chars,
         }
 
     async def _hydrate(self, client, sources: list[dict[str, Any]]) -> None:
@@ -136,6 +152,9 @@ class ImaPipeline:
             "sources": [],
             "provider": PROVIDER,
             "error_type": error_type,
+            "retrieval_status": "error",
+            "source_count": 0,
+            "evidence_chars": 0,
         }
 
     # ----- indexing (not applicable — owned by IMA) ------------------------

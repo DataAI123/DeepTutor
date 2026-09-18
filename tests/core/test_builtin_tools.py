@@ -55,6 +55,24 @@ def _install_module(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("error_type", ["retrieval_error", "not_configured"])
+async def test_rag_preserves_retrieval_failure(monkeypatch, error_type):
+    async def search(**kwargs):
+        return {
+            "answer": "Retrieval failed",
+            "content": "",
+            "sources": [],
+            "error_type": error_type,
+        }
+
+    _install_module(monkeypatch, "deeptutor.tools.rag_tool", rag_search=search)
+    result = await RAGTool().execute(query="q", kb_name="kb")
+    assert result.success is False
+    assert result.metadata["error_type"] == error_type
+    assert result.content == "Retrieval failed"
+
+
+@pytest.mark.asyncio
 async def test_exec_tool_reports_generated_public_artifacts(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

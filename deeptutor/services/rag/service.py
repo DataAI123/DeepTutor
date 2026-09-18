@@ -149,14 +149,24 @@ class RAGService:
                 return result
 
             answer = result.get("answer") or result.get("content") or ""
+            retrieval_status = result.get("retrieval_status")
+            evidence_chars = result.get("evidence_chars", len(answer))
+            summary = f"Retrieved {evidence_chars} characters of grounded context."
+            if retrieval_status == "no_hits":
+                summary = "No matching documents were returned by the knowledge base."
+            elif retrieval_status == "insufficient_content":
+                summary = "References were found, but no usable document text was available."
             await self._emit_tool_event(
                 event_sink,
                 "status",
-                f"Retrieved {len(answer)} characters of grounded context.",
+                summary,
                 {
                     "provider": provider,
                     "kb_name": kb_name,
                     "trace_layer": "summary",
+                    "retrieval_status": retrieval_status,
+                    "evidence_chars": evidence_chars,
+                    "source_count": result.get("source_count", len(result.get("sources") or [])),
                 },
             )
 

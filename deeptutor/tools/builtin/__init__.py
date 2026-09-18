@@ -128,6 +128,7 @@ class RAGTool(_PromptHintsMixin, BaseTool):
             content=content,
             sources=_rag_sources(result, query=query, kb_name=kb_name),
             metadata=result,
+            success=not bool(result.get("error_type") or result.get("needs_reindex")),
         )
 
 
