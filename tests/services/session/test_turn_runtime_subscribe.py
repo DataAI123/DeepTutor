@@ -26,7 +26,7 @@ def _isolate_learning_store(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setattr(LearningStore, "__init__", _init)
 
 
-def _mastery_payload(session_id: str, path_id: str) -> dict:
+def _mastery_payload(session_id: str | None, path_id: str) -> dict:
     return {
         "type": "start_turn",
         "session_id": session_id,
@@ -856,6 +856,55 @@ async def test_mastery_turn_rejects_session_from_an_unrelated_topic(
     assert detail["preferences"]["mastery_path_id"] == "topic-a"
     assert await store.get_active_turn(session["id"]) is None
     assert LearningStore().path_id_for_session(session["id"]) == "topic-a"
+    # Rejection must never leave a stray conversation behind for a panel that
+    # is about to reload the topic.
+    assert len(await store.list_sessions()) == 1
+
+
+@pytest.mark.asyncio
+async def test_repeated_mastery_start_turn_does_not_mint_a_second_session(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """Re-entering a topic must reuse the conversation it already opened.
+
+    The panel can mount twice (StrictMode) or bounce between the topic and the
+    study route while the first turn is still settling (#1412). The re-entry
+    carries the session id the first turn produced, so a second start_turn has
+    to land in that same row — a fresh one per entry is exactly the duplicate
+    that made a just-started path look empty again (#1392).
+    """
+    _isolate_learning_store(monkeypatch, tmp_path)
+    store = SQLiteSessionStore(tmp_path / "chat_history.db")
+    runtime = TurnRuntimeManager(store)
+    hold = asyncio.Event()
+
+    async def _hold_turn(_execution):
+        await hold.wait()
+
+    monkeypatch.setattr(runtime, "_run_turn", _hold_turn)
+    # The first entry has no conversation yet: the turn mints one, and every
+    # later entry echoes that id back rather than opening a new conversation.
+    _, first_turn = await runtime.start_turn(_mastery_payload(None, "topic-a"))
+    await runtime.cancel_turn(first_turn["id"])
+    # ``_hold_turn`` replaces the real runner, so its cancellation handler never
+    # writes the terminal status. Do it here, otherwise the second call trips
+    # the one-active-turn guard instead of exercising session reuse.
+    await store.update_turn_status(first_turn["id"], "cancelled", "Turn cancelled")
+    LearningStore().release_path_lease("topic-a", turn_id=first_turn["id"])
+
+    _, second_turn = await runtime.start_turn(
+        _mastery_payload(first_turn["session_id"], "topic-a")
+    )
+
+    assert second_turn["session_id"] == first_turn["session_id"]
+    assert len(await store.list_sessions()) == 1
+    detail = await store.get_session(first_turn["session_id"])
+    assert detail is not None
+    assert detail["preferences"]["mastery_path_id"] == "topic-a"
+    assert LearningStore().path_id_for_session(first_turn["session_id"]) == "topic-a"
+
+    await runtime.cancel_turn(second_turn["id"])
+    LearningStore().release_path_lease("topic-a", turn_id=second_turn["id"])
 
 
 @pytest.mark.asyncio

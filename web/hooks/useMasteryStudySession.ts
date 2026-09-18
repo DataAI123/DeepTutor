@@ -48,7 +48,7 @@ export function useMasteryStudySession(
   const { t } = useTranslation();
   const {
     state,
-    newSession,
+    ensureDraftSession,
     configureSession,
     loadSession,
     showCachedSession,
@@ -61,7 +61,12 @@ export function useMasteryStudySession(
     routeKey: string;
     error: string | null;
   } | null>(null);
-  const initializedRouteRef = useRef("");
+  // Which named-session route has already been resolved. Loading one writes
+  // `state.sessionId`, which this effect depends on, so without a per-route
+  // guard it would load, re-render and load again. The bare-route branch needs
+  // no such guard: the draft it opens is reused by request identity, so a
+  // repeated run re-applies the same binding instead of opening another (#1412).
+  const resolvedRouteRef = useRef("");
   const draftRouteGuardRef = useRef<MasteryDraftRouteGuard | null>(null);
   const activity = useMasteryPathActivity(pathId || null);
 
@@ -133,17 +138,25 @@ export function useMasteryStudySession(
   useEffect(() => {
     if (!topic) return;
     const routeKey = currentRouteKey;
-    if (initializedRouteRef.current === routeKey) return;
-    initializedRouteRef.current = routeKey;
 
     if (!routeSessionId) {
       draftRouteGuardRef.current = {
         routeKey,
         previousSessionId: state.sessionId,
       };
-      newSession(courseSessionConfiguration(sessionConfiguration, courseId));
+      ensureDraftSession(
+        {
+          masteryPathId: pathId,
+          masterySessionMode: requestedMode,
+          courseId,
+        },
+        courseSessionConfiguration(sessionConfiguration, courseId),
+      );
       return;
     }
+
+    if (resolvedRouteRef.current === routeKey) return;
+    resolvedRouteRef.current = routeKey;
 
     draftRouteGuardRef.current = null;
 
@@ -192,9 +205,10 @@ export function useMasteryStudySession(
     courseId,
     configureSession,
     currentRouteKey,
+    ensureDraftSession,
     loadSession,
-    newSession,
     pathId,
+    requestedMode,
     routeSessionId,
     sessionConfiguration,
     showCachedSession,

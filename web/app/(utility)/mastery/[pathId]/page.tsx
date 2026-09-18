@@ -50,6 +50,7 @@ import {
   type BoardResult,
   type TopicSession,
 } from "@/lib/learning-api";
+import { useMasteryDrafts } from "@/lib/mastery-draft";
 import { setPendingPrompt } from "@/lib/pending-prompt";
 
 const NEXT_LABELS: Record<string, { zh: string; en: string }> = {
@@ -110,6 +111,12 @@ export default function MasteryTopicPage() {
   const editorTriggerRef = useRef<HTMLElement | null>(null);
   const confirmTriggerRef = useRef<HTMLElement | null>(null);
   const activity = useMasteryPathActivity(pathId || null);
+  // Conversations the learner has opened on this path but not committed a
+  // message to. They have no server session, so the fetch above cannot know
+  // about them; without this the panel reports an empty path right after one
+  // was started (#1392). The registry is module-scoped, so it survives the
+  // navigation back here from the study route.
+  const drafts = useMasteryDrafts(pathId);
 
   const openEditor = (trigger: HTMLButtonElement) => {
     editorTriggerRef.current = trigger;
@@ -601,6 +608,7 @@ export default function MasteryTopicPage() {
             <SessionCamp
               pathId={pathId}
               sessions={sessions}
+              drafts={drafts}
               loading={sessionsLoading}
               stale={sessionsError}
               onRetry={() => void loadSessions()}

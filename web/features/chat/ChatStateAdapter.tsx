@@ -86,6 +86,12 @@ import {
   normalizeReadingReferences,
   type ReadingReferencePayload,
 } from "@/lib/reading-references";
+import {
+  masteryDraftFor,
+  releaseMasteryDraft,
+  trackMasteryDraft,
+  type MasteryDraftIdentity,
+} from "@/lib/mastery-draft";
 
 type SessionRuntimeStatus =
   "idle" | "running" | "completed" | "failed" | "cancelled" | "rejected";
@@ -412,26 +418,72 @@ function createSessionEntry(
   };
 }
 
-function ensureSelectedSession(state: ProviderState): SessionEntry {
-  if (state.selectedKey && state.sessions[state.selectedKey]) {
-    return state.sessions[state.selectedKey];
-  }
-  return createSessionEntry("draft");
+/**
+ * The public shape when nothing is selected yet. Every surface reads
+ * ``state`` on the first render, before the provider's mount effect has
+ * registered a draft, so the adapter has to answer with *something*.
+ *
+ * It is a value, not a session: it never enters ``state.sessions``, so no
+ * reducer branch can be led to trust a key that does not exist.
+ */
+function emptyChatState(): ChatState {
+  return {
+    sessionId: null,
+    sessionTitle: "",
+    enabledTools: [],
+    activeCapability: null,
+    workspaceMode: null,
+    timedMediaId: null,
+    knowledgeBases: [],
+    llmSelection: null,
+    masteryPathId: null,
+    masterySessionMode: null,
+    courseId: "",
+    personaSelection: "",
+    messages: [],
+    isStreaming: false,
+    currentStage: "",
+    language:
+      typeof window === "undefined" ? "en" : readStoredResponseLanguage(),
+    selectedBranches: {},
+  };
+}
+
+let draftKeySequence = 0;
+
+/** A key for a conversation that has no server session yet. */
+function nextDraftKey(): string {
+  draftKeySequence += 1;
+  return `draft_${Date.now()}_${draftKeySequence}`;
+}
+
+/** The entry the surface is showing, or undefined before one is selected. */
+function selectedSession(state: ProviderState): SessionEntry | undefined {
+  if (!state.selectedKey) return undefined;
+  return state.sessions[state.selectedKey];
 }
 
 function updateSelectedSession(
   state: ProviderState,
   updater: (session: SessionEntry) => SessionEntry,
 ): ProviderState {
-  const current = ensureSelectedSession(state);
-  const key = state.selectedKey || current.key;
-  const nextSession = updater(current);
+  const current = selectedSession(state);
+  // A dispatch that arrives before anything is selected (the provider's mount
+  // effect always registers one, but a sibling effect can flush first) used to
+  // build an entry under the fixed literal key `"draft"` and leave it out of
+  // `state.sessions`. Anything reading the adapter was then handed a session
+  // no reducer transition could see, and the next keyed dispatch targeting
+  // that key silently did nothing. Register the entry as part of this same
+  // transition instead — the `ADD_USER_MSG` pattern — so what is reported is
+  // what is stored.
+  const key = current?.key ?? nextDraftKey();
+  const base = current ?? createSessionEntry(key);
   return {
     ...state,
     selectedKey: key,
     sessions: {
       ...state.sessions,
-      [key]: nextSession,
+      [key]: updater(base),
     },
   };
 }
@@ -1223,6 +1275,18 @@ interface ChatContextValue {
     configuration: SessionConfiguration,
     sessionKey?: string,
   ) => void;
+  /** The adapter key holding the unsubmitted draft for this request.
+   *
+   *  Identity is the request — topic, mode and course scope — not the row. A
+   *  route that re-enters with the same request re-attaches to the draft it
+   *  already opened, rebuilding the entry under the recorded key when the
+   *  provider has since remounted; only a genuinely new request mints one.
+   *  Without this, re-entering a bare mastery route opened a second draft and,
+   *  from one learner intent, a second server session (#1412). */
+  ensureDraftSession: (
+    identity: MasteryDraftIdentity,
+    configuration: SessionConfiguration,
+  ) => string;
   /** Fetch a session and apply it. Pass ``revalidate`` when the session is
    *  already on screen (see ``showCachedSession``): the snapshot is then
    *  dropped rather than applied if a turn started meanwhile. */
@@ -1433,7 +1497,6 @@ export function ChatStateAdapterProvider({
       }
     >
   >(new Map());
-  const draftCounterRef = useRef(0);
   const retryTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   // Tracks in-flight regenerate requests so we can restore the popped
   // assistant message if the server rejects the request (e.g. ``regenerate_busy``
@@ -1484,10 +1547,7 @@ export function ChatStateAdapterProvider({
     [],
   );
 
-  const makeDraftKey = useCallback(() => {
-    draftCounterRef.current += 1;
-    return `draft_${Date.now()}_${draftCounterRef.current}`;
-  }, []);
+  const makeDraftKey = useCallback(() => nextDraftKey(), []);
 
   const hydrateMessages = useCallback(
     (messages: SessionMessage[]): MessageItem[] => {
@@ -1574,6 +1634,12 @@ export function ChatStateAdapterProvider({
             turnId,
           });
           moveRunner(effectiveKey, sessionId);
+          // The conversation is the server's from here on: it has an id, it
+          // will appear in the topic's session list, and the route is about to
+          // name it. Leaving the local draft record in place would let a later
+          // visit to the bare route re-attach to a conversation the learner
+          // can already open by id — the same session shown twice.
+          releaseMasteryDraft(effectiveKey);
         }
         return;
       }
@@ -2508,7 +2574,8 @@ export function ChatStateAdapterProvider({
   }, [sendThroughRunner]);
 
   const derivedState = useMemo<ChatState>(() => {
-    const current = ensureSelectedSession(state);
+    const current = selectedSession(state);
+    if (!current) return emptyChatState();
     return {
       sessionId: current.sessionId,
       sessionTitle: current.sessionTitle,
@@ -2617,6 +2684,27 @@ export function ChatStateAdapterProvider({
       });
     },
     [],
+  );
+
+  const ensureDraftSession = useCallback(
+    (identity: MasteryDraftIdentity, configuration: SessionConfiguration) => {
+      const recorded = masteryDraftFor(identity);
+      const key = recorded?.sessionKey ?? makeDraftKey();
+      if (stateRef.current.sessions[key]) {
+        // This provider is already holding the entry — re-apply the route's
+        // binding rather than rebuilding it, which would drop the turns it
+        // may already have collected.
+        dispatch({ type: "CONFIGURE_SESSION", key, configuration });
+      } else {
+        // First mount of this provider, or the entry was evicted. Rebuild it
+        // under the recorded key so a remount re-attaches to the same draft
+        // instead of opening a second one (#1412).
+        dispatch({ type: "NEW_SESSION", key, configuration });
+      }
+      trackMasteryDraft(identity, key);
+      return key;
+    },
+    [makeDraftKey],
   );
 
   const editMessage = useCallback(
@@ -2760,6 +2848,7 @@ export function ChatStateAdapterProvider({
       renameSessionTitle,
       newSession,
       configureSession,
+      ensureDraftSession,
       loadSession,
       showCachedSession,
       loadMessageTrace,
@@ -2789,6 +2878,7 @@ export function ChatStateAdapterProvider({
       renameSessionTitle,
       newSession,
       configureSession,
+      ensureDraftSession,
       loadSession,
       showCachedSession,
       loadMessageTrace,

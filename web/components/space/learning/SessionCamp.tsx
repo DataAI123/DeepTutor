@@ -5,12 +5,15 @@ import { useTranslation } from "react-i18next";
 import { ArrowRight, Loader2, MessageCircle, Plus, Radio } from "lucide-react";
 
 import type { TopicSession } from "@/lib/learning-api";
+import type { MasteryDraftRecord } from "@/lib/mastery-draft";
+import { MASTERY_MODE_LABELS, masterySessionRoute } from "@/lib/mastery-mode";
 
 import { formatRelative, type Translate } from "./format";
 
 export function SessionCamp({
   pathId,
   sessions,
+  drafts = [],
   loading,
   stale = false,
   onRetry,
@@ -18,6 +21,16 @@ export function SessionCamp({
 }: {
   pathId: string;
   sessions: TopicSession[];
+  /**
+   * The conversations this topic has open but has not sent a message in yet.
+   *
+   * They have no server session, so they are absent from `sessions` — and
+   * without them the panel told a learner who had just started one that there
+   * were none, which is both false and alarming (#1392). Read from the draft
+   * registry rather than from the runtime: this panel renders outside the chat
+   * provider, on the topic page, and the two sides never share a tree.
+   */
+  drafts?: readonly MasteryDraftRecord[];
   loading: boolean;
   /** The last fetch failed; whatever is listed may be out of date. */
   stale?: boolean;
@@ -31,6 +44,13 @@ export function SessionCamp({
       sessionId
         ? `/mastery/${encodeURIComponent(pathId)}/sessions/${encodeURIComponent(sessionId)}`
         : `/mastery/${encodeURIComponent(pathId)}/sessions`,
+    );
+  // Reopening a draft has to name the request it belongs to. The mode is part
+  // of the draft's identity, so dropping it here would build the identity of a
+  // *different* request and open a second draft beside the one shown.
+  const openDraft = (draft: MasteryDraftRecord) =>
+    router.push(
+      masterySessionRoute(pathId, draft.masterySessionMode, draft.courseId),
     );
 
   return (
@@ -70,7 +90,7 @@ export function SessionCamp({
           <div className="flex min-h-28 items-center justify-center text-[var(--muted-foreground)]">
             <Loader2 className="h-4 w-4 animate-spin" />
           </div>
-        ) : sessions.length === 0 ? (
+        ) : sessions.length === 0 && drafts.length === 0 ? (
           <div className="px-3 py-6 text-center">
             <MessageCircle className="mx-auto h-7 w-7 text-[var(--muted-foreground)] opacity-45" />
             <p className="mt-3 text-sm font-medium text-[var(--foreground)]">
@@ -92,6 +112,34 @@ export function SessionCamp({
           </div>
         ) : (
           <div className="space-y-1.5">
+            {drafts.map((draft) => (
+              // A draft is a real, open conversation that simply has nothing
+              // committed yet, so it is listed like one — but on a dashed card
+              // and with the state it is actually in, rather than borrowing a
+              // session's look and implying work that has not happened.
+              <button
+                key={`draft:${draft.sessionKey}`}
+                type="button"
+                onClick={() => openDraft(draft)}
+                className="group flex w-full items-center gap-3 rounded-xl border border-dashed border-[var(--border)] p-3 text-left transition hover:border-[var(--primary)]/40 hover:bg-[var(--accent)]/70"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]">
+                  <MessageCircle className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-[var(--foreground)]">
+                    {t(MASTERY_MODE_LABELS[draft.masterySessionMode])}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[11px] text-[var(--muted-foreground)]">
+                    {`${t("Not started")} · ${formatRelative(
+                      draft.startedAt / 1000,
+                      zh,
+                    )}`}
+                  </span>
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)] transition-transform group-hover:translate-x-0.5" />
+              </button>
+            ))}
             {sessions.map((session) => {
               const running =
                 session.status === "running" || Boolean(session.active_turn_id);
