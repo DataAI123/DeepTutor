@@ -240,6 +240,22 @@ class TurnExecutor:
                 )
             persist_user_message = bool(payload.get("persist_user_message", True))
             is_regenerate = bool(payload.get("regenerate", False))
+            replacement_message_id: int | str | None = None
+            attachment_inputs = payload.get("attachments", [])
+            if is_regenerate:
+                original = await self.store.get_last_message(session_id, role="user")
+                if original is None or str(original["id"]) != str(
+                    payload.get("regenerated_from_message_id")
+                ):
+                    raise RuntimeError(
+                        "The original message is no longer available for regeneration."
+                    )
+                # Read only from the current scoped session, never from a
+                # client-supplied extraction cache or another session's row.
+                attachment_inputs = original.get("attachments") or []
+                previous = await self.store.get_last_message(session_id)
+                if previous and previous.get("role") == "assistant":
+                    replacement_message_id = previous["id"]
             raw_user_content = str(payload.get("content", "") or "")
             # Edit-branching tip: when the FE includes ``parent_message_id``
             # (even as ``null``), the new user message attaches at that
@@ -280,7 +296,7 @@ class TurnExecutor:
 
             from deeptutor.services.storage import get_attachment_store
 
-            for item in payload.get("attachments", []):
+            for item in attachment_inputs:
                 record = {
                     "type": item.get("type", "file"),
                     "url": item.get("url", ""),
@@ -289,6 +305,10 @@ class TurnExecutor:
                     "mime_type": item.get("mime_type", ""),
                     "id": item.get("id", "") or _uuid.uuid4().hex[:12],
                 }
+                if is_regenerate and item.get("extracted_text"):
+                    record["extracted_text"] = str(item["extracted_text"])
+                    record["extracted_chars"] = len(record["extracted_text"])
+                    record["base64"] = ""  # reuse the trusted, already bounded extraction
                 attachment_records.append(record)
 
             # Persist original bytes to the attachment store before extraction
@@ -329,7 +349,13 @@ class TurnExecutor:
 
             from deeptutor.utils.document_extractor import extract_documents_from_records
 
+            replayed_document_texts = [
+                f"[File: {record.get('filename') or ''}]\n{record['extracted_text']}"
+                for record in attachment_records
+                if is_regenerate and record.get("extracted_text")
+            ]
             document_texts, attachment_records = extract_documents_from_records(attachment_records)
+            document_texts.extend(replayed_document_texts)
             attachments = [
                 Attachment(
                     type=r.get("type", "file"),
@@ -1034,6 +1060,14 @@ class TurnExecutor:
             if not transitioned:
                 execution.lease_lost = True
                 raise asyncio.CancelledError
+            if turn_status == "completed" and replacement_message_id is not None:
+                # The replacement is durable first. Failed/cancelled turns
+                # retain the old answer; a cleanup failure leaves both copies
+                # recoverable rather than turning success into data loss.
+                try:
+                    await self.store.delete_message(replacement_message_id)
+                except Exception:
+                    logger.warning("Could not remove superseded answer after regeneration")
             await self._publish_live_event(execution, pending_done_event)
             stream_done_sent = True
             await self._flush_buffered_events(execution)

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import uuid
 
 from deeptutor.core.stream import StreamEvent, StreamEventType
-from deeptutor.core.turn_request import TurnRequest
+from deeptutor.core.turn_request import OutgoingAttachment, TurnRequest
 from deeptutor.runtime.capability_routing import route_explicit_quiz_request
 from deeptutor.services.session.workspace_preferences import (
     WORKSPACE_MODE_MASTERY,
@@ -659,7 +659,7 @@ class TurnRequestPreparer:
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Re-run the prior user message in ``session_id``.
 
-        Deletes the trailing assistant message (if any), then dispatches a new
+        Preserves the trailing assistant until a replacement succeeds, then dispatches a new
         turn with ``persist_user_message=False`` and ``regenerate=True`` so
         the runtime knows not to duplicate the user row or refresh long-term
         memory a second time. The original user message stays in place.
@@ -688,7 +688,6 @@ class TurnRequestPreparer:
                 if turn_id:
                     previous_turn_id = turn_id
                     break
-            await self.store.delete_message(last_message["id"])
 
         preferences = session.get("preferences") or {}
         overrides = overrides or {}
@@ -743,7 +742,17 @@ class TurnRequestPreparer:
             "tools": tools,
             "knowledge_bases": knowledge_bases,
             "language": language,
-            "attachments": list(last_user.get("attachments") or []),
+            # Persisted records contain trusted extraction fields that are not
+            # public request fields. The executor reloads those from this user
+            # row; never widen the external attachment schema to accept them.
+            "attachments": [
+                {
+                    key: value
+                    for key, value in item.items()
+                    if key in OutgoingAttachment.model_fields
+                }
+                for item in (last_user.get("attachments") or [])
+            ],
             "notebook_references": list(
                 overrides.get("notebook_references")
                 if overrides.get("notebook_references") is not None
@@ -808,6 +817,7 @@ class TurnRequestPreparer:
             "persist_user_message": False,
             "regenerate": True,
             "regenerated_from_message_id": int(last_user["id"]),
+            "parent_message_id": int(last_user["id"]),
         }
         if previous_turn_id:
             payload["superseded_turn_id"] = previous_turn_id

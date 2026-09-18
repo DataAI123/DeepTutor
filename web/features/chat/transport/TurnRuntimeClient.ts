@@ -299,6 +299,14 @@ export class TurnRuntimeClient {
       return;
     }
     if (event.type === "protocol_error") {
+      if (event.error_code === "regenerate_rejected" && event.session_id) {
+        this.pending = this.pending.filter((item) => {
+          const rejected = item.command.type === "regenerate" &&
+            item.command.session_id === event.session_id;
+          if (rejected) item.settle?.(false);
+          return !rejected;
+        });
+      }
       this.options.onDiagnostic?.(
         `turn protocol error; code=${event.error_code}; retryable=${String(event.retryable)}`,
       );

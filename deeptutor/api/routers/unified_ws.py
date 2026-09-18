@@ -324,9 +324,29 @@ async def unified_websocket(ws: WebSocket) -> None:
                 overrides = msg.get("overrides") if isinstance(msg.get("overrides"), dict) else None
                 try:
                     _, turn = await turns.regenerate_last_turn(session_id, overrides=overrides)
+                except ValidationError:
+                    await send_error(
+                        "The saved request could not be validated. Your previous answer is preserved.",
+                        error_code="regenerate_rejected",
+                        session_id=session_id,
+                        terminal=True,
+                    )
+                    continue
                 except RuntimeError as exc:
                     await send_error(
                         str(exc),
+                        error_code="regenerate_rejected",
+                        session_id=session_id,
+                        terminal=True,
+                    )
+                    continue
+                except Exception as exc:
+                    # Validation/provider exceptions can contain attachment
+                    # contents or credentials. Keep the public failure scoped
+                    # and safe, and keep the socket usable for another action.
+                    logger.error("Regenerate preflight failed (%s)", type(exc).__name__)
+                    await send_error(
+                        "Could not start regeneration. Your previous answer is preserved. Please retry.",
                         error_code="regenerate_rejected",
                         session_id=session_id,
                         terminal=True,

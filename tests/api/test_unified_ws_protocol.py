@@ -114,3 +114,30 @@ def test_ws_requires_command_ids_for_retryable_mutations(protocol_client) -> Non
     assert frame["error_code"] == "invalid_command"
     assert frame["protocol_version"] == "2.0"
     assert turns.cancelled == []
+
+
+@pytest.mark.parametrize("kind", ["validation", "runtime", "unexpected"])
+def test_regenerate_rejection_is_scoped_and_keeps_socket_usable(protocol_client, kind):
+    from deeptutor.core.turn_request import TurnRequest
+
+    client, turns = protocol_client
+
+    async def reject(*args, **kwargs):
+        if kind == "validation":
+            TurnRequest.model_validate(
+                {"content": "q", "attachments": [{"type": "file", "secret": "do-not-echo"}]}
+            )
+        if kind == "runtime":
+            raise RuntimeError("regenerate_busy")
+        raise OSError("do-not-echo")
+
+    turns.regenerate_last_turn = reject
+    with client.websocket_connect("/ws") as socket:
+        socket.send_json({"type": "regenerate", "session_id": "s1", "protocol_version": "2.0"})
+        frame = socket.receive_json()
+        assert frame["type"] == "protocol_error"
+        assert frame["error_code"] == "regenerate_rejected"
+        assert frame["session_id"] == "s1"
+        assert "do-not-echo" not in frame["message"]
+        socket.send_json({"type": "ping", "protocol_version": "2.0"})
+        assert socket.receive_json()["type"] == "pong"

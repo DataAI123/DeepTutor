@@ -1550,6 +1550,8 @@ export function ChatStateAdapterProvider({
     (runnerKey: string, event: StreamEvent) => {
       const runner = runnersRef.current.get(runnerKey);
       const effectiveKey = runner?.key || runnerKey;
+      if (event.metadata?.reason === "regenerate_rejected" &&
+          event.session_id !== stateRef.current.sessions[effectiveKey]?.sessionId) return;
       // Reading tools ask the reader to act (scroll to a locator, show a mark
       // they just made) by tagging their result metadata. Re-broadcast it as a
       // DOM event so the reader pane can listen without the chat knowing it
@@ -1713,7 +1715,8 @@ export function ChatStateAdapterProvider({
         // to keep the transcript in sync with the server.
         if (
           reason === "regenerate_busy" ||
-          reason === "nothing_to_regenerate"
+          reason === "nothing_to_regenerate" ||
+          reason === "regenerate_rejected"
         ) {
           const stash = pendingRegenerateRef.current.get(effectiveKey);
           if (stash) {

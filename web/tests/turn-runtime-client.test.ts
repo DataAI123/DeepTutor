@@ -120,6 +120,19 @@ function harness() {
   };
 }
 
+test("rejected regeneration is not retried on reconnection", () => {
+  const { client, sockets, scheduler } = harness();
+  client.connect();
+  sockets[0].open();
+  client.send({ type: "regenerate", session_id: "s1", overrides: {}, protocol_version: "2.0" });
+  sockets[0].message({ type: "protocol_error", error_code: "regenerate_rejected",
+    message: "Rejected", session_id: "s1", turn_id: "", retryable: true, protocol_version: "2.0" });
+  sockets[0].close();
+  scheduler.runNext();
+  sockets[1].open();
+  assert.equal(sockets[1].sent.filter((frame) => frame.type === "regenerate").length, 0);
+});
+
 test("reconnect resumes from the persisted cursor through a different worker", () => {
   const { client, scheduler, sockets, states } = harness();
   client.setResumeCursor("turn-1", 8);

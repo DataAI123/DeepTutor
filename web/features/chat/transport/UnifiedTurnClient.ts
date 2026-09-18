@@ -38,6 +38,25 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 function toStreamEvent(event: ServerEvent): StreamEvent | null {
+  if (event.type === "protocol_error") {
+    return {
+      type: "error",
+      source: "transport",
+      stage: "",
+      content: event.message,
+      session_id: event.session_id || undefined,
+      turn_id: event.turn_id || undefined,
+      timestamp: Date.now() / 1000,
+      metadata: {
+        reason: event.error_code,
+        error_code: event.error_code,
+        retryable: event.retryable,
+        // This is a rejected operation, not a synthetic DONE for a turn
+        // that was never created. Other protocol errors must not end it.
+        turn_terminal: event.error_code === "regenerate_rejected" && Boolean(event.session_id),
+      },
+    };
+  }
   const raw = event as unknown as Record<string, unknown>;
   const type = raw.type;
   if (typeof type !== "string" || !STREAM_TYPES.has(type as StreamEventType))

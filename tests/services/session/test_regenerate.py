@@ -10,14 +10,17 @@ regeneration.
 from __future__ import annotations
 
 import asyncio
+import base64
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
+from pydantic import ValidationError
 import pytest
 
 from deeptutor.core.stream import StreamEvent, StreamEventType
+from deeptutor.core.turn_request import TurnRequest
 from deeptutor.services.session.sqlite_store import SQLiteSessionStore
 from deeptutor.services.session.turn_runtime import (
     TurnRuntimeManager,
@@ -139,6 +142,7 @@ def _seed_session(
     user_content: str = "what is 2+2?",
     assistant_content: str | None = "4",
     user_metadata: dict[str, Any] | None = None,
+    attachments: list[dict[str, Any]] | None = None,
 ) -> tuple[str, int, int | None]:
     """Create a session with a user (and optional assistant) message."""
     session = asyncio.run(store.create_session())
@@ -160,7 +164,9 @@ def _seed_session(
             role="user",
             content=user_content,
             capability="chat",
-            attachments=[{"type": "file", "filename": "a.pdf"}],
+            attachments=attachments
+            if attachments is not None
+            else [{"type": "file", "filename": "a.pdf"}],
             metadata=user_metadata,
         )
     )
@@ -178,7 +184,7 @@ def _seed_session(
 
 
 class TestRegenerateLastTurn:
-    def test_assistant_tail_is_deleted_and_payload_replays_user(
+    def test_assistant_tail_is_preserved_until_success_and_payload_replays_user(
         self, store: SQLiteSessionStore
     ) -> None:
         sid, user_id, assistant_id = _seed_session(store)
@@ -202,8 +208,44 @@ class TestRegenerateLastTurn:
         assert payload["regenerated_from_message_id"] == user_id
 
         remaining = asyncio.run(store.get_messages(sid))
-        assert [m["id"] for m in remaining] == [user_id]
-        assert assistant_id is not None and assistant_id not in {m["id"] for m in remaining}
+        assert [m["id"] for m in remaining] == [user_id, assistant_id]
+        assert payload["parent_message_id"] == user_id
+
+    def test_persisted_attachment_is_replayed_through_real_request_validation(self, store):
+        sid, _, _ = _seed_session(
+            store,
+            attachments=[
+                {
+                    "type": "file",
+                    "filename": "lesson.pdf",
+                    "url": "/files/lesson.pdf",
+                    "id": "stored-id",
+                    "extracted_text": "Stored lesson",
+                    "extracted_chars": 13,
+                }
+            ],
+        )
+        runtime = TurnRuntimeManager(store=store)
+
+        async def validate(payload):
+            request = TurnRequest.model_validate(payload)
+            assert request.attachments[0].filename == "lesson.pdf"
+            assert "extracted_text" not in request.attachments[0].model_dump()
+            return {"id": sid}, {"id": "fake"}
+
+        with patch.object(runtime, "start_turn", new=validate):
+            asyncio.run(runtime.regenerate_last_turn(sid))
+
+    def test_rejected_regenerate_preserves_previous_answer(self, store):
+        sid, user_id, assistant_id = _seed_session(store)
+        runtime = TurnRuntimeManager(store=store)
+
+        async def reject(payload):
+            TurnRequest.model_validate({**payload, "llm_selection": {"bad": "invalid"}})
+
+        with patch.object(runtime, "start_turn", new=reject), pytest.raises(ValidationError):
+            asyncio.run(runtime.regenerate_last_turn(sid))
+        assert [m["id"] for m in asyncio.run(store.get_messages(sid))] == [user_id, assistant_id]
 
     def test_replays_book_references_from_request_snapshot(self, store: SQLiteSessionStore) -> None:
         sid, _, _ = _seed_session(
@@ -274,10 +316,12 @@ class TestRegenerateLastTurn:
         assert str(exc.value) == "regenerate_busy"
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("regenerate_fails", [False, True])
     async def test_end_to_end_skips_memory_refresh_and_no_duplicate_user(
         self,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
+        regenerate_fails: bool,
     ) -> None:
         """Run a real turn, regenerate it, and confirm the runtime contracts.
 
@@ -289,12 +333,23 @@ class TestRegenerateLastTurn:
         """
         store = SQLiteSessionStore(tmp_path / "regen_e2e.db")
         runtime = TurnRuntimeManager(store)
+        contexts = []
+        history_leaves = []
+        extract = Mock(return_value="Cached lesson text")
+        monkeypatch.setattr("deeptutor.utils.document_extractor.extract_text_from_bytes", extract)
+        monkeypatch.setattr(
+            "deeptutor.services.storage.get_attachment_store",
+            lambda: SimpleNamespace(
+                put=AsyncMock(return_value="/files/attachments/test/lesson.txt"),
+            ),
+        )
 
         class FakeContextBuilder:
             def __init__(self, *_args, **_kwargs) -> None:
                 pass
 
             async def build(self, **_kwargs):
+                history_leaves.append(_kwargs.get("leaf_message_id"))
                 return SimpleNamespace(
                     conversation_history=[],
                     conversation_summary="",
@@ -307,6 +362,15 @@ class TestRegenerateLastTurn:
 
         class FakeOrchestrator:
             async def handle(self, _context):
+                contexts.append(_context)
+                if regenerate_fails and len(contexts) == 2:
+                    yield StreamEvent(
+                        type=StreamEventType.ERROR, source="chat", content="Synthetic failure"
+                    )
+                    yield StreamEvent(
+                        type=StreamEventType.DONE, source="chat", metadata={"status": "failed"}
+                    )
+                    return
                 yield StreamEvent(
                     type=StreamEventType.CONTENT,
                     source="chat",
@@ -346,7 +410,13 @@ class TestRegenerateLastTurn:
                 "capability": "chat",
                 "tools": [],
                 "knowledge_bases": [],
-                "attachments": [],
+                "attachments": [
+                    {
+                        "type": "file",
+                        "filename": "lesson.txt",
+                        "base64": base64.b64encode(b"lesson bytes").decode(),
+                    }
+                ],
                 "language": "en",
                 "config": {},
             }
@@ -373,9 +443,20 @@ class TestRegenerateLastTurn:
         assert session_meta.get("regenerated_from_message_id") == original_user_id
 
         after = await store.get_messages(sid)
-        assert [m["role"] for m in after] == ["user", "assistant"]
         assert after[0]["id"] == original_user_id
-        assert after[1]["content"] == "regenerated answer"
+        if regenerate_fails:
+            assert any(
+                m["id"] == before[1]["id"] and m["content"] == "original answer" for m in after
+            )
+        else:
+            assert [m["role"] for m in after] == ["user", "assistant"]
+            assert after[1]["content"] == "regenerated answer"
+            assert after[1]["parent_message_id"] == original_user_id
+        assert history_leaves[-1] == original_user_id
+        assert contexts[1].attachments[0].extracted_text == "Cached lesson text"
+        assert contexts[1].attachments[0].id == contexts[0].attachments[0].id
+        assert list(contexts[1].metadata["source_index"].values()) == ["Cached lesson text"]
+        assert extract.call_count == 1
         # Memory refresh count must not increase on regenerate.
         assert len(refresh_calls) == first_turn_refresh_count
 
