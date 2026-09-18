@@ -144,6 +144,12 @@ async function expectJson<T>(response: Response): Promise<T> {
         response.status >= 500,
       scope: "network",
       status: response.status,
+      // The server stamps every response; keeping it here is what lets the
+      // shelf show a learner a reference they can quote in a report.
+      correlationId:
+        response.headers.get("x-request-id") ??
+        response.headers.get("x-correlation-id") ??
+        undefined,
     });
   }
   return payload as T;

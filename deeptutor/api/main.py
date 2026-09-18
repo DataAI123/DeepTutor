@@ -2,12 +2,13 @@ import asyncio
 from contextlib import asynccontextmanager
 import logging
 import sys
+import uuid
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from deeptutor.logging import configure_logging
+from deeptutor.logging import bind_log_context, configure_logging
 from deeptutor.services.config import (
     ensure_runtime_settings_files,
     export_runtime_settings_to_env,
@@ -405,8 +406,32 @@ async def json_error_boundary(request: Request, call_next):
             content={
                 "detail": f"{type(exc).__name__}: {exc}",
                 "type": type(exc).__name__,
+                "request_id": getattr(request.state, "request_id", None),
             },
         )
+
+
+# Every request carries an id, inside and out. A learner reporting "courses
+# would not load" has nothing actionable to quote unless the response they saw
+# carries the same token the logs do — so the id is echoed on ``x-request-id``
+# (the header both error readers already look for) and bound to the logging
+# context, making one grep in the log find the whole request. An inbound id is
+# honored rather than overwritten, so a proxy or client can propagate its own.
+@app.middleware("http")
+async def request_id_context(request: Request, call_next):
+    request_id = ""
+    for header in ("x-request-id", "x-correlation-id"):
+        candidate = (request.headers.get(header) or "").strip()
+        if candidate:
+            request_id = candidate
+            break
+    if not request_id:
+        request_id = uuid.uuid4().hex
+    request.state.request_id = request_id
+    with bind_log_context(request_id=request_id):
+        response = await call_next(request)
+    response.headers["x-request-id"] = request_id
+    return response
 
 
 # Access logging is funneled through this one middleware. uvicorn's own

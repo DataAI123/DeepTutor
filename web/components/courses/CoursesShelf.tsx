@@ -6,7 +6,6 @@ import {
   Archive,
   ArrowRight,
   BookOpen,
-  CircleAlert,
   Layers,
   MessagesSquare,
   Plus,
@@ -16,6 +15,125 @@ import CourseDialog from "@/components/courses/CourseDialog";
 import { createCourse, listCourses, type StudyCourse } from "@/lib/courses-api";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { listAllSessions, type SessionSummary } from "@/lib/session-api";
+import { ApiError } from "@/shared/api/errors";
+import { browserReturnPath, loginHref } from "@/shared/auth/return-url";
+import { Button } from "@/shared/ui/Button";
+import { InlineAlert } from "@/shared/ui/InlineAlert";
+
+/**
+ * Why the shelf is empty, in the three shapes that need different answers.
+ *
+ * A 403 is not a failure to fetch — it is the server saying this account may
+ * not open the library, and retrying keeps saying so; the learner needs to sign
+ * in or switch account. Anything else (5xx, an unreachable server) is a
+ * transient "try again", and carries the server's request id so a report can
+ * name the exact call. Collapsing both into one message is what made a
+ * permission refusal indistinguishable from an empty shelf (#1228).
+ */
+type CoursesLoadFailure = {
+  kind: "forbidden" | "unavailable" | "unknown";
+  message: string;
+  requestId?: string;
+};
+
+function classifyLoadFailure(error: unknown): CoursesLoadFailure {
+  const status = error instanceof ApiError ? error.status : undefined;
+  const requestId = error instanceof ApiError ? error.correlationId : undefined;
+  const message =
+    error instanceof Error && error.message.trim() ? error.message.trim() : "";
+  if (status === 401 || status === 403) {
+    return { kind: "forbidden", message, requestId };
+  }
+  if (
+    status === undefined ||
+    status === 408 ||
+    status === 429 ||
+    status >= 500
+  ) {
+    return { kind: "unavailable", message, requestId };
+  }
+  return { kind: "unknown", message, requestId };
+}
+
+function CoursesLoadFailureNotice({
+  failure,
+  onRetry,
+}: {
+  failure: CoursesLoadFailure;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const forbidden = failure.kind === "forbidden";
+  const description =
+    failure.message ||
+    (forbidden
+      ? t(
+          "This account cannot open the course library. Sign in again or switch accounts, then retry.",
+        )
+      : t(
+          "The server could not be reached. Check that DeepTutor is running, then retry.",
+        ));
+
+  const copyRequestId = async () => {
+    if (!failure.requestId) return;
+    try {
+      await navigator.clipboard.writeText(failure.requestId);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <InlineAlert
+      tone={forbidden ? "warning" : "danger"}
+      role="alert"
+      title={
+        forbidden
+          ? t("You do not have access to courses")
+          : t("Courses could not load")
+      }
+      action={
+        <div className="flex flex-col items-end gap-1.5">
+          <Button size="sm" variant="secondary" onClick={onRetry}>
+            {t("Retry")}
+          </Button>
+          {forbidden ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                window.location.href = loginHref(
+                  browserReturnPath(window.location),
+                );
+              }}
+            >
+              {t("Sign in")}
+            </Button>
+          ) : null}
+        </div>
+      }
+    >
+      <p>{description}</p>
+      {failure.requestId ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11.5px]">
+          <span>{t("Diagnostic ID")}</span>
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
+            {failure.requestId}
+          </code>
+          <button
+            type="button"
+            onClick={() => void copyRequestId()}
+            className="underline underline-offset-2"
+          >
+            {copied ? t("Copied") : t("Copy diagnostic ID")}
+          </button>
+        </div>
+      ) : null}
+    </InlineAlert>
+  );
+}
 
 /**
  * The course library — every subject the learner is carrying.
@@ -37,31 +155,32 @@ export default function CoursesShelf() {
   const [courses, setCourses] = useState<StudyCourse[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<CoursesLoadFailure | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.all([
-      listCourses({ force: true }),
-      listAllSessions({ force: true }),
-    ])
-      .then(([nextCourses, nextSessions]) => {
-        if (cancelled) return;
-        setCourses(nextCourses);
-        setSessions(nextSessions);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        setLoadError(error instanceof Error ? error.message : "");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+  // Kept as a callback rather than inlined in the effect so the failure notice
+  // can offer an honest retry: a refused request should be re-runnable without
+  // a page reload, since the reason it failed may well have changed.
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [nextCourses, nextSessions] = await Promise.all([
+        listCourses({ force: true }),
+        listAllSessions({ force: true }),
+      ]);
+      setCourses(nextCourses);
+      setSessions(nextSessions);
+    } catch (error: unknown) {
+      setLoadError(classifyLoadFailure(error));
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   // A finished term should stop competing for attention without disappearing —
   // its material, questions and paths are all still there.
@@ -141,20 +260,10 @@ export default function CoursesShelf() {
           ))}
         </div>
       ) : loadError !== null ? (
-        <div
-          role="alert"
-          className="flex min-h-32 items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-[12.5px] text-[var(--muted-foreground)]"
-        >
-          <CircleAlert size={16} strokeWidth={1.8} aria-hidden />
-          <span>
-            <span className="block font-medium text-[var(--foreground)]">
-              {t("Courses could not load")}
-            </span>
-            <span className="mt-1 block leading-relaxed">
-              {loadError || t("Courses could not load")}
-            </span>
-          </span>
-        </div>
+        <CoursesLoadFailureNotice
+          failure={loadError}
+          onRetry={() => void load()}
+        />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {active.map((course) => (

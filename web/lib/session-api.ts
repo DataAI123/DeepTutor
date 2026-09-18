@@ -1,6 +1,7 @@
 import { apiFetch, apiUrl } from "@/lib/api";
 import { invalidateClientCache, withClientCache } from "@/lib/client-cache";
 import type { LLMSelection, StreamEvent } from "@/features/chat/model/protocol";
+import { ApiError } from "@/shared/api/errors";
 import { browserReturnPath, loginHref } from "@/shared/auth/return-url";
 
 export interface SessionMessage {
@@ -169,7 +170,23 @@ async function expectJson<T>(response: Response): Promise<T> {
     return new Promise(() => {});
   }
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    // A bare ``Error`` erased the status, so a caller deciding what to do about
+    // a refusal (retry? sign in?) could not tell a 403 from a 500. Carry the
+    // same fields the shared client does.
+    throw new ApiError({
+      code: `http_${response.status}`,
+      message: `Request failed: ${response.status}`,
+      retryable:
+        response.status === 408 ||
+        response.status === 429 ||
+        response.status >= 500,
+      scope: "network",
+      status: response.status,
+      correlationId:
+        response.headers.get("x-request-id") ??
+        response.headers.get("x-correlation-id") ??
+        undefined,
+    });
   }
   return response.json() as Promise<T>;
 }
