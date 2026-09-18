@@ -36,13 +36,28 @@ from deeptutor.services.rag.pipelines.ima.config import (
     ImaNotConfiguredError,
     config_from_entry,
 )
+from deeptutor.services.rag.pipelines.ima.diagnose import (
+    CREDENTIAL_SOURCE_ACCOUNT,
+    CREDENTIAL_SOURCE_KB,
+    CREDENTIAL_SOURCE_MIXED,
+    CREDENTIAL_SOURCE_NONE,
+    FINGERPRINT_CHARS,
+    MAX_MESSAGE_CHARS,
+    _as_int,
+    _credential_source,
+    _fingerprint,
+    _summarize,
+    diagnose_knowledge_base,
+)
+from deeptutor.services.rag.pipelines.ima.envelope import response_code
 from deeptutor.services.rag.pipelines.ima.models import parse_knowledge_page
-from deeptutor.services.rag.pipelines.ima.pipeline import ImaPipeline
+from deeptutor.services.rag.pipelines.ima.pipeline import ImaPipeline, SearchDiagnostics
 from deeptutor.services.rag.pipelines.ima.probe import probe_knowledge_base
 from deeptutor.services.rag.pipelines.ima.sources import (
     DEFAULT_HYDRATION_BUDGET,
     MIN_USEFUL_SNIPPET_CHARS,
 )
+from deeptutor.services.rag.pipelines.ima.transport import ImaWireEvent
 
 CONFIG = ImaConfig(client_id="cid", api_key="key", knowledge_base_id="kb-1")
 
@@ -950,3 +965,286 @@ class TestFactoryRouting:
 
     def test_factory_builds_the_ima_pipeline(self) -> None:
         assert isinstance(get_pipeline("ima"), ImaPipeline)
+
+
+class TestSearchDiagnostics:
+    def test_counts_every_stage(self, tmp_path) -> None:
+        base = _kb_config(
+            tmp_path,
+            {"client_id": "cid", "api_key": "key", "knowledge_base_id": "kb-1"},
+        )
+        stub = _SearchStub(
+            [
+                {"media_id": "m1", "title": "Alpha", "highlight_content": _thick("alpha")},
+                {"media_id": "m2", "title": "Beta"},
+            ]
+        )
+        diagnostics = SearchDiagnostics()
+
+        asyncio.run(
+            ImaPipeline(kb_base_dir=base, client_factory=lambda _c: stub).search(
+                "q", "IMA", diagnostics=diagnostics
+            )
+        )
+
+        assert diagnostics.documents == 2
+        assert diagnostics.folders == 0
+        assert diagnostics.sources == 2
+        # Alpha's snippet is already substantial; only the snippet-less Beta is
+        # worth a full-text fetch, and that fetch came back empty.
+        assert diagnostics.hydration_targets == 1
+        assert diagnostics.hydrated == 0
+        assert diagnostics.hydration_failed == 1
+        assert stub.media_calls == ["m2"]
+
+    def test_defaults_to_zero_without_a_search(self) -> None:
+        assert SearchDiagnostics().documents == 0
+        assert SearchDiagnostics().hydration_targets == 0
+
+
+# ---------------------------------------------------------------------------
+# diagnose
+# ---------------------------------------------------------------------------
+
+
+def _account_settings(
+    monkeypatch, tmp_path, *, client_id: str = "", api_key: str = ""
+) -> None:
+    """Point the account-level IMA settings at a throwaway file."""
+    import deeptutor.services.config as config_module
+    from deeptutor.services.config.runtime_settings import RuntimeSettingsService
+
+    service = RuntimeSettingsService(tmp_path / "settings", process_env={})
+    if client_id or api_key:
+        service.save_ima({"client_id": client_id, "api_key": api_key})
+    monkeypatch.setattr(config_module, "get_runtime_settings_service", lambda: service)
+
+
+class TestResponseCode:
+    def test_reads_both_documented_spellings(self) -> None:
+        assert response_code({"retcode": 0}) == 0
+        assert response_code({"code": 20004}) == 20004
+
+    def test_the_reference_spelling_wins(self) -> None:
+        assert response_code({"retcode": 7, "code": 9}) == 7
+
+    @pytest.mark.parametrize(
+        "payload",
+        [None, "not-a-dict", {}, {"msg": "ok"}, {"code": "not-an-int"}],
+    )
+    def test_absent_or_unusable_code_is_none(self, payload) -> None:
+        assert response_code(payload) is None
+
+
+class TestWireObserver:
+    def test_records_each_round_trip(self) -> None:
+        events: list[ImaWireEvent] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return _ok({"info_list": [], "is_end": True, "next_cursor": ""})
+
+        client = ImaClient(
+            CONFIG, transport=httpx.MockTransport(handler), observer=events.append
+        )
+
+        asyncio.run(client.search_knowledge("q", limit=5))
+
+        assert events == [
+            ImaWireEvent(method="search_knowledge", status_code=200, code=0)
+        ]
+
+    def test_a_rejected_call_is_recorded_before_it_raises(self) -> None:
+        events: list[ImaWireEvent] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"retcode": 20004, "errmsg": "bad key"})
+
+        client = ImaClient(
+            CONFIG, transport=httpx.MockTransport(handler), observer=events.append
+        )
+
+        with pytest.raises(ImaAuthError):
+            asyncio.run(client.search_knowledge("q", limit=5))
+
+        assert events == [ImaWireEvent(method="search_knowledge", status_code=200, code=20004)]
+
+    def test_no_observer_is_harmless(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return _ok({"info_list": [], "is_end": True, "next_cursor": ""})
+
+        client = ImaClient(CONFIG, transport=httpx.MockTransport(handler))
+
+        asyncio.run(client.search_knowledge("q", limit=5))
+
+
+class TestFingerprint:
+    @pytest.mark.parametrize("value", ["", "   ", None])
+    def test_blank_has_no_fingerprint(self, value) -> None:
+        assert _fingerprint(value) is None
+
+    def test_is_a_short_stable_prefix(self) -> None:
+        fingerprint = _fingerprint(" kb-1 ")
+
+        assert fingerprint is not None
+        assert len(fingerprint) == FINGERPRINT_CHARS
+        assert fingerprint == _fingerprint("kb-1")
+
+    def test_distinct_ids_do_not_collide(self) -> None:
+        assert _fingerprint("kb-1") != _fingerprint("kb-2")
+
+
+class TestSummarize:
+    @pytest.mark.parametrize("text", ["", "   ", None])
+    def test_blank_is_none(self, text) -> None:
+        assert _summarize(text) is None
+
+    def test_signed_urls_are_redacted(self) -> None:
+        summary = _summarize("download failed: https://cos.example.com/a?sign=leaky now")
+
+        assert summary is not None
+        assert "<redacted-url>" in summary
+        assert "cos.example.com" not in summary
+        assert "leaky" not in summary
+
+    def test_long_messages_are_truncated(self) -> None:
+        summary = _summarize("x" * (MAX_MESSAGE_CHARS + 40))
+
+        assert summary is not None
+        assert len(summary) == MAX_MESSAGE_CHARS + 1
+        assert summary.endswith("…")
+
+
+class TestAsInt:
+    @pytest.mark.parametrize(
+        "value, expected",
+        [("3", 3), (2, 2), (None, 0), ("", 0), ("abc", 0), (True, 1)],
+    )
+    def test_coerces_or_falls_back_to_zero(self, value, expected) -> None:
+        assert _as_int(value) == expected
+
+
+class TestCredentialSource:
+    def test_a_complete_override_is_reported_as_kb(self) -> None:
+        entry = {"client_id": "cid", "api_key": "key", "knowledge_base_id": "kb-1"}
+
+        assert _credential_source(entry) == CREDENTIAL_SOURCE_KB
+
+    @pytest.mark.parametrize("entry", [{"client_id": "cid"}, {"api_key": "key"}])
+    def test_half_a_pair_is_mixed(self, entry: dict) -> None:
+        assert _credential_source(entry) == CREDENTIAL_SOURCE_MIXED
+
+    def test_the_account_pair_is_reported_as_account(self, tmp_path, monkeypatch) -> None:
+        _account_settings(monkeypatch, tmp_path, client_id="cid", api_key="key")
+
+        assert _credential_source({"knowledge_base_id": "kb-1"}) == CREDENTIAL_SOURCE_ACCOUNT
+
+    def test_nothing_anywhere_is_none(self, tmp_path, monkeypatch) -> None:
+        _account_settings(monkeypatch, tmp_path)
+
+        assert _credential_source({}) == CREDENTIAL_SOURCE_NONE
+
+
+class TestDiagnoseKnowledgeBase:
+    def test_a_missing_binding_is_the_finding(self, tmp_path, monkeypatch) -> None:
+        _account_settings(monkeypatch, tmp_path)
+        base = _kb_config(tmp_path, {"type": "ima", "rag_provider": "ima"})
+
+        report = asyncio.run(diagnose_knowledge_base(base, "IMA", "a unique phrase"))
+
+        assert report.configured is False
+        assert report.credential_source == CREDENTIAL_SOURCE_NONE
+        assert report.error_type == "not_configured"
+        assert report.retrieval_status == "error"
+        assert report.evidence_chars == 0
+        assert report.remote == []
+        assert report.error is not None and "knowledge base ID" in report.error
+
+    def test_reports_binding_round_trips_and_stage_counts(self, tmp_path, monkeypatch) -> None:
+        _account_settings(monkeypatch, tmp_path)
+        base = _kb_config(
+            tmp_path,
+            {
+                "type": "ima",
+                "client_id": "cid",
+                "api_key": "key",
+                "knowledge_base_id": "kb-1",
+            },
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return _ok(
+                {
+                    "info_list": [
+                        {"media_id": "m1", "title": "Alpha", "highlight_content": _thick("alpha")},
+                        {"media_id": "m2", "title": "Beta"},
+                    ],
+                    "is_end": True,
+                    "next_cursor": "",
+                }
+            )
+
+        def builder(config, observer):
+            return ImaClient(config, transport=httpx.MockTransport(handler), observer=observer)
+
+        report = asyncio.run(
+            diagnose_knowledge_base(
+                base, "IMA", "a unique phrase", client_builder=builder
+            )
+        )
+
+        assert report.configured is True
+        assert report.credential_source == CREDENTIAL_SOURCE_KB
+        assert report.knowledge_base_id_fingerprint == _fingerprint("kb-1")
+        assert report.documents == 2
+        assert report.sources == 2
+        assert report.hydration_targets == 1
+        assert report.hydration_failed == 1
+        assert report.evidence_chars > 0
+        assert report.retrieval_status == "ok"
+        assert report.error_type is None
+        # Every IMA round-trip retrieval made, in order, with its business code.
+        assert [event["method"] for event in report.remote] == [
+            "search_knowledge",
+            "get_media_info",
+        ]
+        assert all(event["code"] == 0 for event in report.remote)
+
+    def test_the_report_carries_no_secret_and_no_url(self, tmp_path, monkeypatch) -> None:
+        _account_settings(monkeypatch, tmp_path)
+        base = _kb_config(
+            tmp_path,
+            {
+                "type": "ima",
+                "client_id": "cid",
+                "api_key": "super-secret-key",
+                "knowledge_base_id": "kb-1",
+            },
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "code": 20004,
+                    "msg": "rejected, see https://cos.example.com/signed?sign=leaky",
+                    "data": None,
+                },
+            )
+
+        def builder(config, observer):
+            return ImaClient(config, transport=httpx.MockTransport(handler), observer=observer)
+
+        report = asyncio.run(
+            diagnose_knowledge_base(base, "IMA", "phrase", client_builder=builder)
+        )
+        dumped = json.dumps(report.to_dict(), ensure_ascii=False)
+
+        assert "super-secret-key" not in dumped
+        assert "cos.example.com" not in dumped
+        assert "sign=leaky" not in dumped
+        assert "kb-1" not in dumped
+        assert report.retrieval_status == "error"
+        assert report.error_type == "retrieval_error"
+        assert report.remote == [
+            {"method": "search_knowledge", "status_code": 200, "code": 20004}
+        ]

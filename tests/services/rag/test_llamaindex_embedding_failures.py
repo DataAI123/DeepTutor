@@ -103,6 +103,10 @@ async def test_search_returns_reindex_hint_for_null_vector_index(
     assert result["needs_reindex"] is True
     assert "Re-index the knowledge base" in result["answer"]
     assert "unsupported operand" not in result["answer"]
+    # The error branch carries the same status contract as the success branch.
+    assert result["retrieval_status"] == "error"
+    assert result["source_count"] == 0
+    assert result["evidence_chars"] == 0
 
 
 def test_retrieve_nodes_rejects_invalid_persisted_embeddings(
@@ -193,6 +197,111 @@ async def test_search_reconfigures_llamaindex_settings_for_cached_pipeline(
 
     assert result["provider"] == "llamaindex"
     assert configure_calls == ["configure", "configure"]
+    # An empty KB reports the empty-result arm of the three-state contract.
+    assert result["retrieval_status"] == "no_hits"
+    assert result["source_count"] == 0
+    assert result["evidence_chars"] == 0
+
+
+class _FakeNode:
+    def __init__(
+        self,
+        text: str,
+        *,
+        node_id: str = "node-1",
+        metadata: dict | None = None,
+        score: float | None = 0.9,
+    ) -> None:
+        self.node = SimpleNamespace(
+            text=text,
+            metadata=metadata if metadata is not None else {},
+            node_id=node_id,
+        )
+        self.score = score
+
+
+def _search_pipeline_with_nodes(tmp_path, monkeypatch, nodes):
+    from deeptutor.services.rag.pipelines.llamaindex import storage as storage_module
+    from deeptutor.services.rag.pipelines.llamaindex.pipeline import LlamaIndexPipeline
+
+    storage_dir = tmp_path / "kb" / "version-1"
+    storage_dir.mkdir(parents=True)
+    (storage_dir / "docstore.json").write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(
+        LlamaIndexPipeline,
+        "_configure_settings",
+        lambda self: None,
+    )
+    monkeypatch.setattr(
+        storage_module,
+        "retrieve_nodes",
+        lambda *_args, **_kwargs: list(nodes),
+    )
+
+    return LlamaIndexPipeline(
+        kb_base_dir=str(tmp_path),
+        signature_provider=lambda: None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_reports_ok_state_for_matching_nodes(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    nodes = [
+        _FakeNode("Fourier transforms decompose signals into frequencies."),
+        _FakeNode("The inverse transform reconstructs the original.", node_id="node-2"),
+    ]
+    pipeline = _search_pipeline_with_nodes(tmp_path, monkeypatch, nodes)
+
+    result = await pipeline.search("what is a Fourier transform?", "kb")
+
+    assert result["provider"] == "llamaindex"
+    assert result["retrieval_status"] == "ok"
+    assert result["source_count"] == 2
+    assert result["evidence_chars"] == sum(
+        len(node.node.text.strip()) for node in nodes
+    )
+    assert result["content"]
+
+
+@pytest.mark.asyncio
+async def test_search_reports_insufficient_content_for_empty_text_nodes(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    nodes = [
+        _FakeNode("   ", node_id="node-1"),
+        _FakeNode("\n", node_id="node-2"),
+    ]
+    pipeline = _search_pipeline_with_nodes(tmp_path, monkeypatch, nodes)
+
+    result = await pipeline.search("what is a Fourier transform?", "kb")
+
+    # A hit whose text carried nothing is neither "ok" nor a true empty KB.
+    assert result["retrieval_status"] == "insufficient_content"
+    assert result["source_count"] == 2
+    assert result["evidence_chars"] == 0
+
+
+@pytest.mark.asyncio
+async def test_search_reports_error_state_when_no_index_matches(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from deeptutor.services.rag.pipelines.llamaindex.pipeline import LlamaIndexPipeline
+
+    monkeypatch.setattr(LlamaIndexPipeline, "_configure_settings", lambda self: None)
+    pipeline = LlamaIndexPipeline(
+        kb_base_dir=str(tmp_path),
+        signature_provider=lambda: None,
+    )
+
+    result = await pipeline.search("what is a Fourier transform?", "kb")
+
+    assert result["needs_reindex"] is True
+    assert result["retrieval_status"] == "error"
+    assert result["source_count"] == 0
+    assert result["evidence_chars"] == 0
 
 
 @pytest.mark.asyncio

@@ -314,6 +314,39 @@ def register(app: typer.Typer) -> None:
         console.print(f"[bold]Provider:[/] {provider}")
         console.print(f"[bold]Answer:[/]\n{answer}")
 
+    @app.command("diagnose-ima")
+    def kb_diagnose_ima(
+        name: str = typer.Argument(..., help="KB name."),
+        query: str = typer.Option(
+            ...,
+            "--query",
+            "-q",
+            help="A short, unique sentence from the textbook.",
+        ),
+    ) -> None:
+        """Redacted forensics for a connected Tencent IMA knowledge base.
+
+        Runs one query through the KB's real retrieval path and prints a JSON
+        evidence report (no API key, signed URL or textbook text). Use it when a
+        mounted IMA KB answers with nothing, to see which stage stopped.
+        """
+        from deeptutor.services.rag.pipelines.ima.diagnose import diagnose_knowledge_base
+
+        mgr = _get_kb_manager()
+        if name not in mgr.list_knowledge_bases():
+            console.print(f"[red]Knowledge base '{name}' not found.[/]")
+            raise typer.Exit(code=1)
+
+        try:
+            report = asyncio.run(diagnose_knowledge_base(str(mgr.base_dir), name, query))
+        except Exception as exc:
+            console.print(f"[red]Diagnose failed: {exc}[/]")
+            raise typer.Exit(code=1) from exc
+
+        console.print_json(
+            json.dumps(report.to_dict(), indent=2, ensure_ascii=False, default=str)
+        )
+
     # ── GitHub source commands ──────────────────────────────────────
 
     @app.command("add-github-source")

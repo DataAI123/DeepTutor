@@ -135,6 +135,11 @@ def test_search_requires_reasoning_as_retrieval(tmp_path) -> None:
     assert res["error_type"] == "reasoning_as_retrieval_required"
     assert res["content"] == ""
     assert res["sources"] == []
+    # A fail-closed search is an error, not an empty result: the chat layer must
+    # be able to tell "read this KB through an agent loop" from "no match".
+    assert res["retrieval_status"] == "error"
+    assert res["source_count"] == 0
+    assert res["evidence_chars"] == 0
 
 
 def test_document_map_exposes_manifest(tmp_path) -> None:
@@ -153,6 +158,9 @@ def test_search_without_documents_still_requires_agent_loop(tmp_path) -> None:
     assert res["error_type"] == "reasoning_as_retrieval_required"
     assert res["sources"] == []
     assert res["provider"] == "pageindex"
+    assert res["retrieval_status"] == "error"
+    assert res["source_count"] == 0
+    assert res["evidence_chars"] == 0
 
 
 def test_delete_drops_cloud_docs_and_local_dir(tmp_path) -> None:

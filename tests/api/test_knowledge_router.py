@@ -2800,3 +2800,101 @@ def test_delete_reports_a_missing_knowledge_base_as_404(monkeypatch, tmp_path: P
     with TestClient(_build_app()) as client:
         response = client.post("/api/knowledge-bases/delete", json={"name": "never-created"})
     assert response.status_code == 404
+
+
+def _capture_diagnose(monkeypatch) -> list[tuple[str, str, str]]:
+    """Record the diagnose calls without running the real retrieval path."""
+    import deeptutor.services.rag.pipelines.ima.diagnose as diagnose_module
+
+    calls: list[tuple[str, str, str]] = []
+
+    async def fake_diagnose(
+        kb_base_dir: str, kb_name: str, query: str, *, client_builder=None
+    ) -> object:
+        calls.append((kb_base_dir, kb_name, query))
+        return diagnose_module.ImaDiagnosis(
+            kb_name=kb_name,
+            query=query,
+            configured=True,
+            credential_source=diagnose_module.CREDENTIAL_SOURCE_ACCOUNT,
+            knowledge_base_id_fingerprint="deadbeef",
+            remote=[{"method": "POST", "status_code": 200, "code": "success"}],
+            documents=3,
+            folders=0,
+            sources=1,
+            hydration_targets=1,
+            hydrated=1,
+            hydration_failed=0,
+            evidence_chars=64,
+            retrieval_status="ok",
+        )
+
+    monkeypatch.setattr(diagnose_module, "diagnose_knowledge_base", fake_diagnose)
+    return calls
+
+
+def _manager_with_ima_kb(monkeypatch, tmp_path: Path):
+    manager = _real_manager(monkeypatch, tmp_path)
+    manager.config.setdefault("knowledge_bases", {})["ima-kb"] = {
+        "path": "ima-kb",
+        "type": "ima",
+        "rag_provider": "ima",
+        "knowledge_base_id": "remote-library-id",
+        "api_key": "private-key",
+        "client_id": "private-client",
+    }
+    manager._save_config()
+    return manager
+
+
+def test_diagnose_ima_requires_a_query(monkeypatch, tmp_path: Path) -> None:
+    calls = _capture_diagnose(monkeypatch)
+    _manager_with_ima_kb(monkeypatch, tmp_path)
+
+    with TestClient(_build_app()) as client:
+        missing = client.get("/api/knowledge-bases/ima-kb/diagnose-ima")
+        blank = client.get("/api/knowledge-bases/ima-kb/diagnose-ima?query=%20%20")
+
+    # A missing param is a schema violation (422); an empty one is asked for.
+    assert missing.status_code == 422
+    assert blank.status_code == 400
+    assert "query" in blank.json()["detail"].lower()
+    # Neither request reaches the retrieval path.
+    assert calls == []
+
+
+def test_diagnose_ima_reports_unknown_kb_as_404(monkeypatch, tmp_path: Path) -> None:
+    calls = _capture_diagnose(monkeypatch)
+    manager = _real_manager(monkeypatch, tmp_path)
+
+    with TestClient(_build_app()) as client:
+        response = client.get("/api/knowledge-bases/missing/diagnose-ima?query=why")
+
+    assert response.status_code == 404
+    assert calls == []
+    assert not (manager.base_dir / "missing").exists()
+
+
+def test_diagnose_ima_returns_the_redacted_report(monkeypatch, tmp_path: Path) -> None:
+    calls = _capture_diagnose(monkeypatch)
+    manager = _manager_with_ima_kb(monkeypatch, tmp_path)
+
+    with TestClient(_build_app()) as client:
+        response = client.get("/api/knowledge-bases/ima-kb/diagnose-ima?query=%20why%20empty%3F%20")
+
+    assert response.status_code == 200
+    assert calls == [(str(manager.base_dir), "ima-kb", "why empty?")]
+    payload = response.json()
+    assert payload["kb_name"] == "ima-kb"
+    assert payload["query"] == "why empty?"
+    assert payload["credential_source"] == "account"
+    assert payload["knowledge_base_id_fingerprint"] == "deadbeef"
+    assert payload["remote"] == [{"method": "POST", "status_code": 200, "code": "success"}]
+    assert payload["documents"] == 3
+    assert payload["sources"] == 1
+    assert payload["evidence_chars"] == 64
+    assert payload["retrieval_status"] == "ok"
+    # The bound credentials never reach the client.
+    assert "private-key" not in response.text
+    assert "private-client" not in response.text
+    assert "remote-library-id" not in response.text

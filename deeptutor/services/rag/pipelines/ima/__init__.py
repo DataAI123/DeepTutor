@@ -14,6 +14,8 @@ stores anything locally; everything is an OpenAPI call:
 * :mod:`.client` — the knowledge-base method table, with :mod:`.transport`,
   :mod:`.envelope`, :mod:`.models` and :mod:`.media` underneath it.
 * :mod:`.probe` — the connect-time health check.
+* :mod:`.diagnose` — redacted forensics for a KB that answers with nothing:
+  which stage (binding / remote / parsing) the evidence stopped at.
 
 The IMA credentials are configured once for the account on the engine page (a KB
 may override them to reach another account); the knowledge base id is always

@@ -44,7 +44,7 @@ from .models import (
     parse_knowledge_page,
 )
 from .notes import ImaNotesClient
-from .transport import API_BASE_URL, DEFAULT_TIMEOUT, ImaTransport
+from .transport import API_BASE_URL, DEFAULT_TIMEOUT, ImaTransport, WireObserver
 
 # IMA's documented page bounds for every ``limit``-taking knowledge-base call.
 MAX_PAGE_LIMIT = 50
@@ -73,11 +73,12 @@ class ImaClient:
         *,
         timeout: float = DEFAULT_TIMEOUT,
         transport: Optional[httpx.AsyncBaseTransport] = None,
+        observer: Optional[WireObserver] = None,
     ) -> None:
         self._config = config
         self._timeout = timeout
         self._transport = transport
-        self._wire = ImaTransport(config, timeout=timeout, transport=transport)
+        self._wire = ImaTransport(config, timeout=timeout, transport=transport, observer=observer)
         self._notes = ImaNotesClient(config, timeout=timeout, transport=transport)
 
     @property

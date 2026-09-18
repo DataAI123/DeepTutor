@@ -18,6 +18,7 @@ The retrieval *policy* — which matches deserve a full-text fetch — lives in
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -38,6 +39,30 @@ DEFAULT_KB_BASE_DIR = str(get_runtime_data_root() / "knowledge_bases")
 # budget, not a document budget.
 _DEFAULT_TOP_K = 10
 _MAX_TOP_K = 50
+
+
+@dataclass
+class SearchDiagnostics:
+    """What one retrieval observed, stage by stage.
+
+    Purely observational: ``search`` fills this in when a caller passes one and
+    behaves identically when it does not. It exists so a mounted-but-empty IMA
+    KB can be told apart by *where* the evidence stopped flowing — nothing
+    matched, matches carried no text, or the full-text top-up failed — without
+    re-running the retrieval under a different code path. Counts only; no
+    query, snippet or document text is ever recorded here.
+    """
+
+    # Matched by the remote: IMA returns documents and folders separately, and
+    # only documents ever become sources.
+    documents: int = 0
+    folders: int = 0
+    # Documents that survived shaping into the ``sources`` shape.
+    sources: int = 0
+    # Documents selected for a full-text top-up, and how those fetches ended.
+    hydration_targets: int = 0
+    hydrated: int = 0
+    hydration_failed: int = 0
 
 
 class ImaPipeline:
@@ -68,7 +93,14 @@ class ImaPipeline:
 
     # ----- retrieval ------------------------------------------------------
 
-    async def search(self, query: str, kb_name: str, **kwargs) -> Dict[str, Any]:
+    async def search(
+        self,
+        query: str,
+        kb_name: str,
+        *,
+        diagnostics: Optional[SearchDiagnostics] = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
         try:
             config = resolve_kb_config(load_kb_config_entry(self.kb_base_dir, kb_name))
         except ImaNotConfiguredError as exc:
@@ -81,8 +113,14 @@ class ImaPipeline:
             self.logger.error("IMA search failed for '%s': %s", kb_name, exc)
             return self._error_result(query, exc, error_type="retrieval_error")
 
+        if diagnostics is not None:
+            diagnostics.documents = len(page.documents)
+            diagnostics.folders = len(page.folders)
+
         sources = source_policy.documents_to_sources(page.documents)
-        await self._hydrate(client, sources)
+        await self._hydrate(client, sources, diagnostics=diagnostics)
+        if diagnostics is not None:
+            diagnostics.sources = len(sources)
         content = source_policy.render_context(sources)
         evidence_chars = sum(len(str(source.get("content") or "").strip()) for source in sources)
         status = "ok" if evidence_chars else ("insufficient_content" if sources else "no_hits")
@@ -108,7 +146,13 @@ class ImaPipeline:
             "evidence_chars": evidence_chars,
         }
 
-    async def _hydrate(self, client, sources: list[dict[str, Any]]) -> None:
+    async def _hydrate(
+        self,
+        client,
+        sources: list[dict[str, Any]],
+        *,
+        diagnostics: Optional[SearchDiagnostics] = None,
+    ) -> None:
         """Replace thin or missing snippets with real source text, concurrently.
 
         Each fetch is independent, so they run together — a search that needs
@@ -117,6 +161,8 @@ class ImaPipeline:
         one unavailable file must never discard the other matches.
         """
         targets = source_policy.hydration_targets(sources)
+        if diagnostics is not None:
+            diagnostics.hydration_targets = len(targets)
         if not targets:
             return
         results = await asyncio.gather(
@@ -132,8 +178,16 @@ class ImaPipeline:
                     sources[index]["chunk_id"],
                     type(result).__name__,
                 )
+                if diagnostics is not None:
+                    diagnostics.hydration_failed += 1
             elif result:
                 sources[index]["content"] = result
+                if diagnostics is not None:
+                    diagnostics.hydrated += 1
+            elif diagnostics is not None:
+                # Fetched without error but no text came back: the top-up ran
+                # and the source still has nothing to reason from.
+                diagnostics.hydration_failed += 1
 
     @staticmethod
     async def _fetch_text(client, source: dict[str, Any]) -> str:
@@ -176,4 +230,4 @@ class ImaPipeline:
         return True
 
 
-__all__ = ["ImaPipeline", "PROVIDER"]
+__all__ = ["ImaPipeline", "PROVIDER", "SearchDiagnostics"]

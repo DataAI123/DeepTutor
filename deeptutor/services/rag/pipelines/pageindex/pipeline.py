@@ -205,6 +205,9 @@ class PageIndexPipeline:
             "PageIndex uses Reasoning as Retrieval. Read this knowledge base with "
             "its PageIndex tools inside an agent loop instead of calling rag search."
         )
+        # The same three-state verdict every provider reports (see the ima
+        # pipeline); a fail-closed search is an error, not an empty result, so
+        # the chat layer can tell "no index" from "index with no match".
         return {
             "query": query,
             "answer": message,
@@ -212,6 +215,9 @@ class PageIndexPipeline:
             "sources": [],
             "provider": self.provider,
             "error_type": "reasoning_as_retrieval_required",
+            "retrieval_status": "error",
+            "source_count": 0,
+            "evidence_chars": 0,
         }
 
     def document_map(self, kb_name: str) -> dict[str, str]:

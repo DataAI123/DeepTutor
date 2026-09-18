@@ -20,18 +20,36 @@ header and envelope handling.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Optional
 
 import httpx
 
 from .config import ImaConfig
-from .envelope import ImaRateLimitError, unwrap
+from .envelope import ImaRateLimitError, response_code, unwrap
 
 API_BASE_URL = "https://ima.qq.com"
 WIKI_PREFIX = "/openapi/wiki/v1"
 NOTE_PREFIX = "/openapi/note/v1"
 
 DEFAULT_TIMEOUT = 30.0
+
+
+@dataclass(frozen=True)
+class ImaWireEvent:
+    """What one IMA round-trip answered, at the transport level.
+
+    Only the method, the HTTP status and the envelope's business code — never
+    the request body (which carries the query) or the response payload (which
+    may embed a short-lived signed download URL).
+    """
+
+    method: str
+    status_code: int
+    code: Optional[int] = None
+
+
+WireObserver = Callable[[ImaWireEvent], None]
 
 
 def build_headers(config: ImaConfig) -> dict[str, str]:
@@ -52,10 +70,14 @@ class ImaTransport:
         *,
         timeout: float = DEFAULT_TIMEOUT,
         transport: Optional[httpx.AsyncBaseTransport] = None,
+        observer: Optional[WireObserver] = None,
     ) -> None:
         self.config = config
         self.timeout = timeout
         self.transport = transport
+        # Diagnostics-only sink. Kept off the returned value so the retrieval
+        # path stays unaware of it, and never handed the body or the payload.
+        self.observer = observer
 
     async def post(
         self,
@@ -71,7 +93,24 @@ class ImaTransport:
             transport=self.transport,
         ) as client:
             response = await client.post(f"{prefix}/{method}", json=body)
+        self._observe(method, response)
         return self._unwrap(response)
+
+    def _observe(self, method: str, response: httpx.Response) -> None:
+        """Report one round-trip before it is unwrapped (so failures are seen too)."""
+        if self.observer is None:
+            return
+        try:
+            payload = response.json()
+        except Exception:
+            payload = None
+        self.observer(
+            ImaWireEvent(
+                method=method,
+                status_code=response.status_code,
+                code=response_code(payload),
+            )
+        )
 
     def post_sync(
         self,
@@ -118,5 +157,7 @@ __all__ = [
     "NOTE_PREFIX",
     "WIKI_PREFIX",
     "ImaTransport",
+    "ImaWireEvent",
+    "WireObserver",
     "build_headers",
 ]

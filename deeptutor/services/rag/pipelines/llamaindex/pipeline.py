@@ -226,6 +226,9 @@ class LlamaIndexPipeline:
                 ),
                 "content": "",
                 "provider": "llamaindex",
+                "retrieval_status": "error",
+                "source_count": 0,
+                "evidence_chars": 0,
                 "needs_reindex": True,
             }
 
@@ -292,12 +295,25 @@ class LlamaIndexPipeline:
             )
 
         content = "\n\n".join(context_parts) if context_parts else ""
+        evidence_chars = sum(len(part.strip()) for part in context_parts)
+        # The same three-state verdict every provider reports (see the ima
+        # pipeline), so the chat layer can tell an empty KB from a match whose
+        # text carried nothing, without provider-specific branching.
+        if evidence_chars:
+            retrieval_status = "ok"
+        elif sources:
+            retrieval_status = "insufficient_content"
+        else:
+            retrieval_status = "no_hits"
         return {
             "query": query,
             "answer": content,
             "content": content,
             "sources": sources,
             "provider": "llamaindex",
+            "retrieval_status": retrieval_status,
+            "source_count": len(sources),
+            "evidence_chars": evidence_chars,
         }
 
     async def add_documents(self, kb_name: str, file_paths: List[str], **kwargs) -> bool:

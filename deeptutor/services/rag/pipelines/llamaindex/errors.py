@@ -21,6 +21,9 @@ def search_error_result(query: str, exc: Exception) -> Dict[str, Any]:
             "provider": "llamaindex",
             "error": message,
             "error_type": "invalid_embedding_provider_response",
+            "retrieval_status": "error",
+            "source_count": 0,
+            "evidence_chars": 0,
             "log_message": (
                 "Embedding provider returned an invalid query vector; check "
                 "the embedding provider/model configuration."
@@ -46,6 +49,9 @@ def search_error_result(query: str, exc: Exception) -> Dict[str, Any]:
             "provider": "llamaindex",
             "error": message,
             "error_type": "invalid_embedding_index",
+            "retrieval_status": "error",
+            "source_count": 0,
+            "evidence_chars": 0,
             "log_message": "RAG index contains invalid embedding vectors; re-index required.",
             "needs_reindex": True,
         }
@@ -56,4 +62,7 @@ def search_error_result(query: str, exc: Exception) -> Dict[str, Any]:
         "content": "",
         "provider": "llamaindex",
         "error": message,
+        "retrieval_status": "error",
+        "source_count": 0,
+        "evidence_chars": 0,
     }

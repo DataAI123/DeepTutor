@@ -77,6 +77,18 @@ def unwrap(payload: Any, *, status_code: int) -> dict[str, Any]:
     raise ImaAPIError(message or f"IMA request failed with code {code}.")
 
 
+def response_code(payload: Any) -> int | None:
+    """The envelope's business code, or ``None`` when the payload carries none.
+
+    :func:`unwrap` consumes the code to *raise*, which loses it for callers that
+    only need to report what IMA answered (diagnostics). This reads the same
+    fields without deciding anything, so both stay in agreement.
+    """
+    if not isinstance(payload, dict):
+        return None
+    return _first_present(payload, _CODE_KEYS)
+
+
 def _first_present(payload: dict[str, Any], keys: tuple[str, ...]) -> int | None:
     """The first key's value coerced to int, or ``None`` when none is usable."""
     for key in keys:
@@ -105,5 +117,6 @@ __all__ = [
     "ImaAPIError",
     "ImaAuthError",
     "ImaRateLimitError",
+    "response_code",
     "unwrap",
 ]

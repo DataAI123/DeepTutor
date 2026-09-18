@@ -2329,6 +2329,33 @@ async def probe_ima_route(payload: ProbeImaRequest):
     return result.to_dict()
 
 
+@router.get("/knowledge-bases/{kb_name}/diagnose-ima")
+async def diagnose_ima_route(kb_name: str, query: str):
+    """Redacted forensics for a connected IMA knowledge base.
+
+    Answers "why did this mounted KB return nothing?" by running *query* through
+    the KB's real retrieval path and reporting what each stage observed: which
+    level the credentials came from, a hash prefix of the bound library id, every
+    IMA round-trip's HTTP/business status, the documents/folders/sources counts,
+    how the full-text top-up ended, and retrieval's final verdict.
+
+    Deliberately redacted: never the API key, a signed download URL, or any
+    textbook text, and upstream exception messages are not echoed.
+    """
+    from deeptutor.services.rag.pipelines.ima.diagnose import diagnose_knowledge_base
+
+    query = (query or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="A query is required to diagnose.")
+
+    manager = get_kb_manager()
+    if kb_name not in manager.list_knowledge_bases():
+        raise HTTPException(status_code=404, detail="Knowledge base not found.")
+
+    report = await diagnose_knowledge_base(str(manager.base_dir), kb_name, query)
+    return report.to_dict()
+
+
 @router.post("/knowledge-bases/connect-ima")
 async def connect_ima_route(payload: ConnectImaRequest):
     """Connect a Tencent IMA knowledge base as a retrieval-only knowledge base.
