@@ -66,9 +66,28 @@ class ParseService:
         This is a cheap routing check only: it does not require the file to
         exist, initialize models, or evaluate engine readiness.
         """
-        engine_name = (engine or self.active_engine()).strip().lower()
+        engine_name = self._resolve_engine(source_path, engine)
         supported = get_parser(engine_name).supported_formats()
         return not supported or _matches_supported_format(source_path, supported)
+
+    def _resolve_engine(self, source_path: str | Path, engine: Optional[str]) -> str:
+        """Route plain text locally only when the default cannot read it.
+
+        Explicit engine choices remain strict. Never retry engine failures via
+        another provider or change where a user's document is sent.
+        """
+        selected = (engine or self.active_engine()).strip().lower()
+        if engine is None:
+            text_supported = get_parser("text_only").supported_formats()
+            selected_supported = get_parser(selected).supported_formats()
+            if (
+                text_supported
+                and selected_supported
+                and _matches_supported_format(source_path, text_supported)
+                and not _matches_supported_format(source_path, selected_supported)
+            ):
+                return "text_only"
+        return selected
 
     def parse(
         self,
@@ -88,7 +107,7 @@ class ParseService:
         if not source_path.is_file():
             raise ParserError(f"File to parse not found: {source_path}")
 
-        engine_name = (engine or self.active_engine()).strip().lower()
+        engine_name = self._resolve_engine(source_path, engine)
         parser = get_parser(engine_name)
         config = parser.resolve_config()
 

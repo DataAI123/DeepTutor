@@ -109,6 +109,39 @@ def test_unsupported_format_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         service.parse(_pdf(tmp_path, b"data", "notes.txt"), engine="fake")
 
 
+@pytest.mark.parametrize("suffix", [".txt", ".MD", ".TXT"])
+def test_default_parser_routes_plain_text_without_changing_explicit_choice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: str
+) -> None:
+    primary = _FakeParser()
+    fallback = _FakeParser(sig="text")
+    fallback.supported_formats = lambda: frozenset({".txt", ".md"})
+    monkeypatch.setattr(
+        svc_mod, "get_parser", lambda name: fallback if name == "text_only" else primary
+    )
+    monkeypatch.setattr(ParseService, "active_engine", lambda self: "mineru")
+    service = ParseService(cache_root=tmp_path / "cache")
+    document = _pdf(tmp_path, b"lesson text", "lesson" + suffix)
+
+    assert service.supports(document)
+    assert not service.supports(document, engine="mineru")
+    parsed = service.parse(document)
+    assert parsed.engine == "text_only"
+    assert service.parse(document).workdir == parsed.workdir
+    assert len(fallback.calls) == 1
+    assert not primary.calls
+    with pytest.raises(ParserError, match="support"):
+        service.parse(document, engine="mineru")
+
+
+def test_supported_default_parser_failure_does_not_trigger_fallback(tmp_path, monkeypatch):
+    primary = _FakeParser(ready=False)
+    _use(monkeypatch, primary)
+    monkeypatch.setattr(ParseService, "active_engine", lambda self: "mineru")
+    with pytest.raises(ParserError, match="not ready"):
+        ParseService(cache_root=tmp_path / "cache").parse(_pdf(tmp_path))
+
+
 def test_supports_is_a_side_effect_free_suffix_check(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
