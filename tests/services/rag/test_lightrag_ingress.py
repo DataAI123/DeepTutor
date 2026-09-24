@@ -60,6 +60,32 @@ def _structured(asset_dir: Path | None = None) -> ParsedDocument:
     )
 
 
+def _create_symlink_or_simulate_permission_denied(
+    target: Path,
+    link: Path,
+    *,
+    monkeypatch: pytest.MonkeyPatch,
+    target_is_directory: bool = False,
+) -> None:
+    try:
+        link.symlink_to(target, target_is_directory=target_is_directory)
+    except OSError as exc:
+        if os.name != "nt" or getattr(exc, "winerror", None) != 1314:
+            raise
+
+        # Windows without Developer Mode/admin rights cannot create a real link.
+        # Keep the security-branch test meaningful by simulating the filesystem
+        # predicate at exactly this path instead of skipping the assertion.
+        if not target_is_directory:
+            link.write_bytes(b"simulated link entry")
+        original_is_symlink = Path.is_symlink
+
+        def is_symlink(path: Path) -> bool:
+            return path == link or original_is_symlink(path)
+
+        monkeypatch.setattr(Path, "is_symlink", is_symlink)
+
+
 def test_freeze_is_an_independent_digest_verified_bundle(tmp_path: Path) -> None:
     source = tmp_path / "paper.pdf"
     source.write_bytes(b"original pdf")
@@ -127,7 +153,9 @@ def test_bundle_tamper_and_unsafe_names_fail_closed(tmp_path: Path) -> None:
         ingress.load_verified_bundle(working, "../notes.md")
 
 
-def test_bundle_payload_rejects_a_symlinked_parent(tmp_path: Path) -> None:
+def test_bundle_payload_rejects_a_symlinked_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     source = tmp_path / "notes.md"
     source.write_text("notes", encoding="utf-8")
     working = tmp_path / "version-1"
@@ -142,7 +170,9 @@ def test_bundle_payload_rejects_a_symlinked_parent(tmp_path: Path) -> None:
     markdown = staged.bundle_dir / "markdown.utf8"
     markdown.unlink()
     nested = staged.bundle_dir / "nested"
-    nested.symlink_to(outside, target_is_directory=True)
+    _create_symlink_or_simulate_permission_denied(
+        outside, nested, target_is_directory=True, monkeypatch=monkeypatch
+    )
     manifest = json.loads(staged.manifest_path.read_text(encoding="utf-8"))
     manifest["markdown"]["path"] = "nested/payload"
     staged.manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -151,7 +181,9 @@ def test_bundle_payload_rejects_a_symlinked_parent(tmp_path: Path) -> None:
         ingress.load_verified_bundle(working, "notes.md")
 
 
-def test_source_and_assets_reject_links(tmp_path: Path) -> None:
+def test_source_and_assets_reject_links(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     source = tmp_path / "source.pdf"
     source.write_bytes(b"pdf")
     hardlink = tmp_path / "hardlink.pdf"
@@ -164,7 +196,9 @@ def test_source_and_assets_reject_links(tmp_path: Path) -> None:
     assets = tmp_path / "assets"
     assets.mkdir()
     (assets / "outside.png").write_bytes(b"image")
-    (assets / "link.png").symlink_to(assets / "outside.png")
+    _create_symlink_or_simulate_permission_denied(
+        assets / "outside.png", assets / "link.png", monkeypatch=monkeypatch
+    )
     with pytest.raises(ingress.IngressError, match="symbolic link"):
         ingress.freeze_document(tmp_path / "version-symlink", ordinary, _structured(assets))
 
