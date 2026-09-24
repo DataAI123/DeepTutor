@@ -139,7 +139,9 @@ def _absolutize_img_paths(blocks: list[dict], content_dir: Path) -> list[dict]:
         if not isinstance(img_path, str) or not img_path:
             continue
         p = Path(img_path)
-        if p.is_absolute():
+        # A leading "/" is absolute on POSIX but drive-less on Windows, where
+        # Path("/x").is_absolute() is False and joining would invent a drive.
+        if p.is_absolute() or img_path.startswith("/"):
             continue
         if ".." in p.parts:
             logger.warning("Skipping traversal img_path in content_list: %s", img_path)
