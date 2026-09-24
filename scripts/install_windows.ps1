@@ -105,10 +105,6 @@ if (-not (Test-Path -LiteralPath $venvPython -PathType Leaf) -or -not (Test-Path
     throw "The virtual environment was not created correctly at $(Join-Path $InstallDir '.venv'). No existing files were removed."
 }
 
-& $venvPython -m pip install --disable-pip-version-check --upgrade pip
-if ($LASTEXITCODE -ne 0) {
-    throw 'Could not upgrade pip in the DeepTutor virtual environment.'
-}
 & $venvPython -m pip install --disable-pip-version-check --upgrade deeptutor
 if ($LASTEXITCODE -ne 0) {
     throw 'DeepTutor installation failed. The virtual environment is preserved so you can inspect or retry it.'
