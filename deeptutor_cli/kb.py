@@ -323,6 +323,12 @@ def register(app: typer.Typer) -> None:
             "-q",
             help="A short, unique sentence from the textbook.",
         ),
+        redact_query: bool = typer.Option(
+            False,
+            "--redact-query",
+            help="Replace the echoed query with a length+hash marker before "
+            "printing — use this for any report that leaves this machine.",
+        ),
     ) -> None:
         """Redacted forensics for a connected Tencent IMA knowledge base.
 
@@ -338,7 +344,11 @@ def register(app: typer.Typer) -> None:
             raise typer.Exit(code=1)
 
         try:
-            report = asyncio.run(diagnose_knowledge_base(str(mgr.base_dir), name, query))
+            report = asyncio.run(
+                diagnose_knowledge_base(
+                    str(mgr.base_dir), name, query, redact_query=redact_query
+                )
+            )
         except Exception as exc:
             console.print(f"[red]Diagnose failed: {exc}[/]")
             raise typer.Exit(code=1) from exc

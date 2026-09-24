@@ -1159,6 +1159,24 @@ class TestDiagnoseKnowledgeBase:
         assert report.remote == []
         assert report.error is not None and "knowledge base ID" in report.error
 
+    def test_redact_query_replaces_the_echo_but_stays_comparable(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        _account_settings(monkeypatch, tmp_path)
+        base = _kb_config(tmp_path, {"type": "ima", "rag_provider": "ima"})
+        query = "a unique phrase"
+
+        plain = asyncio.run(diagnose_knowledge_base(base, "IMA", query))
+        redacted = asyncio.run(
+            diagnose_knowledge_base(base, "IMA", query, redact_query=True)
+        )
+
+        assert plain.query == query
+        assert plain.query_redacted is False
+        assert redacted.query == f"<redacted len={len(query)} sha256/8={_fingerprint(query)}>"
+        assert redacted.query_redacted is True
+        assert query not in json.dumps(redacted.to_dict(), ensure_ascii=False)
+
     def test_reports_binding_round_trips_and_stage_counts(self, tmp_path, monkeypatch) -> None:
         _account_settings(monkeypatch, tmp_path)
         base = _kb_config(

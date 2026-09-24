@@ -24,6 +24,11 @@ the API key, a request or response body, a signed COS URL, or any textbook text.
 The one free-text field (an upstream error message) is run through
 :func:`_summarize`, which strips URLs and truncates.
 
+The single leak the report cannot avoid on its own is the *query*: it is echoed
+verbatim, and a query is usually a unique sentence lifted from the textbook.
+``redact_query=True`` replaces it with a length + hash marker, which still lets
+two reports be compared without carrying the source text out.
+
 Like :mod:`.probe`, this always returns an :class:`ImaDiagnosis` and never
 raises: a failed diagnosis is still a diagnosis.
 """
@@ -67,6 +72,8 @@ class ImaDiagnosis:
 
     kb_name: str
     query: str
+    # True when *query* was replaced by its length + hash marker before leaving.
+    query_redacted: bool = False
     # Whether a complete ImaConfig could be resolved at all.
     configured: bool = False
     # One of CREDENTIAL_SOURCE_*: which level the credential pair came from.
@@ -98,15 +105,24 @@ async def diagnose_knowledge_base(
     query: str,
     *,
     client_builder: Optional[Callable[[ImaConfig, WireObserver], Any]] = None,
+    redact_query: bool = False,
 ) -> ImaDiagnosis:
     """Run *query* through the KB's real retrieval path and report what it saw.
 
     *client_builder* — ``(config, observer) -> client`` — is an injection seam
     for tests; the observer is handed to it so a stub can still report its
     round-trips. In production it is a real :class:`ImaClient`.
+
+    *redact_query* keeps the textbook sentence out of the report: the echoed
+    ``query`` becomes ``"<redacted len=N sha256/8=XXXX>"`` and
+    ``query_redacted`` is set, so two runs of the same query still line up.
     """
     query = str(query or "").strip()
-    report = ImaDiagnosis(kb_name=kb_name, query=query)
+    report = ImaDiagnosis(
+        kb_name=kb_name,
+        query=_redacted_query(query) if redact_query else query,
+        query_redacted=redact_query,
+    )
 
     entry = load_kb_config_entry(kb_base_dir, kb_name)
     report.credential_source = _credential_source(entry)
@@ -176,6 +192,12 @@ def _fingerprint(value: str) -> Optional[str]:
     if not normalized:
         return None
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:FINGERPRINT_CHARS]
+
+
+def _redacted_query(query: str) -> str:
+    """A comparison-safe stand-in for the query: length + hash prefix, no text."""
+    digest = hashlib.sha256(query.encode("utf-8")).hexdigest()[:FINGERPRINT_CHARS]
+    return f"<redacted len={len(query)} sha256/{FINGERPRINT_CHARS}={digest}>"
 
 
 def _summarize(text: Any) -> Optional[str]:

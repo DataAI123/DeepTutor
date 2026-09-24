@@ -36,16 +36,20 @@ class _FakeKbManager:
         return list(self._names)
 
 
-def _patch_diagnose(monkeypatch) -> list[tuple[str, str, str]]:
+def _patch_diagnose(monkeypatch) -> list[tuple[str, str, str, bool]]:
     import deeptutor.services.rag.pipelines.ima.diagnose as diagnose_module
 
-    calls: list[tuple[str, str, str]] = []
+    calls: list[tuple[str, str, str, bool]] = []
 
-    async def fake_diagnose(kb_base_dir, kb_name, query, *, client_builder=None):
-        calls.append((kb_base_dir, kb_name, query))
+    async def fake_diagnose(
+        kb_base_dir, kb_name, query, *, client_builder=None, redact_query=False
+    ):
+        calls.append((kb_base_dir, kb_name, query, redact_query))
+        echo = "<redacted>" if redact_query else query
         return diagnose_module.ImaDiagnosis(
             kb_name=kb_name,
-            query=query,
+            query=echo,
+            query_redacted=redact_query,
             configured=True,
             credential_source=diagnose_module.CREDENTIAL_SOURCE_ACCOUNT,
             knowledge_base_id_fingerprint="deadbeef",
@@ -76,7 +80,24 @@ def test_diagnose_ima_prints_the_redacted_report(monkeypatch, tmp_path: Path) ->
     assert payload["kb_name"] == "ima-kb"
     assert payload["retrieval_status"] == "ok"
     assert payload["knowledge_base_id_fingerprint"] == "deadbeef"
-    assert calls == [(str(tmp_path), "ima-kb", "why empty?")]
+    assert calls == [(str(tmp_path), "ima-kb", "why empty?", False)]
+
+
+def test_diagnose_ima_redact_query_flag_is_forwarded(monkeypatch, tmp_path: Path) -> None:
+    calls = _patch_diagnose(monkeypatch)
+    manager = _FakeKbManager(tmp_path, ["ima-kb"])
+    monkeypatch.setattr(kb_module, "_get_kb_manager", lambda: manager)
+
+    result = runner.invoke(
+        app,
+        ["kb", "diagnose-ima", "ima-kb", "--query", "why empty?", "--redact-query"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["query"] == "<redacted>"
+    assert payload["query_redacted"] is True
+    assert calls == [(str(tmp_path), "ima-kb", "why empty?", True)]
 
 
 def test_diagnose_ima_exits_one_for_unknown_kb(monkeypatch, tmp_path: Path) -> None:

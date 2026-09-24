@@ -2330,7 +2330,7 @@ async def probe_ima_route(payload: ProbeImaRequest):
 
 
 @router.get("/knowledge-bases/{kb_name}/diagnose-ima")
-async def diagnose_ima_route(kb_name: str, query: str):
+async def diagnose_ima_route(kb_name: str, query: str, redact_query: bool = False):
     """Redacted forensics for a connected IMA knowledge base.
 
     Answers "why did this mounted KB return nothing?" by running *query* through
@@ -2340,7 +2340,9 @@ async def diagnose_ima_route(kb_name: str, query: str):
     how the full-text top-up ended, and retrieval's final verdict.
 
     Deliberately redacted: never the API key, a signed download URL, or any
-    textbook text, and upstream exception messages are not echoed.
+    textbook text, and upstream exception messages are not echoed. Pass
+    ``redact_query=true`` for a report safe to share — the echoed query is
+    usually a sentence lifted from the textbook.
     """
     from deeptutor.services.rag.pipelines.ima.diagnose import diagnose_knowledge_base
 
@@ -2352,7 +2354,9 @@ async def diagnose_ima_route(kb_name: str, query: str):
     if kb_name not in manager.list_knowledge_bases():
         raise HTTPException(status_code=404, detail="Knowledge base not found.")
 
-    report = await diagnose_knowledge_base(str(manager.base_dir), kb_name, query)
+    report = await diagnose_knowledge_base(
+        str(manager.base_dir), kb_name, query, redact_query=redact_query
+    )
     return report.to_dict()
 
 

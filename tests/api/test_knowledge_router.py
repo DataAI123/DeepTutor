@@ -2802,19 +2802,21 @@ def test_delete_reports_a_missing_knowledge_base_as_404(monkeypatch, tmp_path: P
     assert response.status_code == 404
 
 
-def _capture_diagnose(monkeypatch) -> list[tuple[str, str, str]]:
+def _capture_diagnose(monkeypatch) -> list[tuple[str, str, str, bool]]:
     """Record the diagnose calls without running the real retrieval path."""
     import deeptutor.services.rag.pipelines.ima.diagnose as diagnose_module
 
-    calls: list[tuple[str, str, str]] = []
+    calls: list[tuple[str, str, str, bool]] = []
 
     async def fake_diagnose(
-        kb_base_dir: str, kb_name: str, query: str, *, client_builder=None
+        kb_base_dir: str, kb_name: str, query: str, *, client_builder=None, redact_query=False
     ) -> object:
-        calls.append((kb_base_dir, kb_name, query))
+        calls.append((kb_base_dir, kb_name, query, redact_query))
+        echo = "<redacted>" if redact_query else query
         return diagnose_module.ImaDiagnosis(
             kb_name=kb_name,
-            query=query,
+            query=echo,
+            query_redacted=redact_query,
             configured=True,
             credential_source=diagnose_module.CREDENTIAL_SOURCE_ACCOUNT,
             knowledge_base_id_fingerprint="deadbeef",
@@ -2883,7 +2885,7 @@ def test_diagnose_ima_returns_the_redacted_report(monkeypatch, tmp_path: Path) -
         response = client.get("/api/knowledge-bases/ima-kb/diagnose-ima?query=%20why%20empty%3F%20")
 
     assert response.status_code == 200
-    assert calls == [(str(manager.base_dir), "ima-kb", "why empty?")]
+    assert calls == [(str(manager.base_dir), "ima-kb", "why empty?", False)]
     payload = response.json()
     assert payload["kb_name"] == "ima-kb"
     assert payload["query"] == "why empty?"
@@ -2898,3 +2900,19 @@ def test_diagnose_ima_returns_the_redacted_report(monkeypatch, tmp_path: Path) -
     assert "private-key" not in response.text
     assert "private-client" not in response.text
     assert "remote-library-id" not in response.text
+
+
+def test_diagnose_ima_redact_query_param_is_forwarded(monkeypatch, tmp_path: Path) -> None:
+    calls = _capture_diagnose(monkeypatch)
+    manager = _manager_with_ima_kb(monkeypatch, tmp_path)
+
+    with TestClient(_build_app()) as client:
+        response = client.get(
+            "/api/knowledge-bases/ima-kb/diagnose-ima?query=why+empty%3F&redact_query=true"
+        )
+
+    assert response.status_code == 200
+    assert calls == [(str(manager.base_dir), "ima-kb", "why empty?", True)]
+    payload = response.json()
+    assert payload["query"] == "<redacted>"
+    assert payload["query_redacted"] is True
