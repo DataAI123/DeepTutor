@@ -144,20 +144,22 @@ if (-not $NoDesktopShortcut) {
 }
 
 Write-Host ''
-Write-Host 'Running offline startup diagnostics (this does not call a model provider)...'
+Write-Host 'Running offline setup diagnostics (this does not call a model provider)...'
 Push-Location $InstallDir
 try {
-    & $venvPython -m deeptutor_cli.main doctor startup
+    & $venvPython -m deeptutor_cli.main doctor
     $doctorExit = $LASTEXITCODE
 }
 finally {
     Pop-Location
 }
 if ($doctorExit -ne 0) {
-    Write-Warning 'DeepTutor is installed, but one or more startup checks need attention. Run "deeptutor doctor startup" after setup.'
+    Write-Warning 'DeepTutor is installed, but one or more setup checks need attention. Run "deeptutor doctor" after setup.'
 }
 
 Write-Host "DeepTutor is installed in $InstallDir"
 Write-Host "Launcher: $launcherPath"
 Write-Host "To start from PowerShell: & `"$venvPython`" -m deeptutor_cli.main start"
 Write-Host 'To stop a detached instance: deeptutor stop'
+# A doctor warning is actionable setup feedback, not an installation failure.
+$global:LASTEXITCODE = 0
