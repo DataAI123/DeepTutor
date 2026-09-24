@@ -4,6 +4,7 @@ import asyncio
 import importlib.util
 import inspect
 import json
+import os
 from pathlib import Path
 import sys
 import types
@@ -39,6 +40,30 @@ REQUIRES_LIGHTRAG = pytest.mark.skipif(
     importlib.util.find_spec("lightrag") is None,
     reason="requires the optional rag-lightrag extra",
 )
+
+
+def _create_symlink_or_simulate_permission_denied(
+    target: Path,
+    link: Path,
+    *,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    try:
+        link.symlink_to(target)
+    except OSError as exc:
+        if os.name != "nt" or getattr(exc, "winerror", None) != 1314:
+            raise
+
+        # Windows without Developer Mode/admin rights cannot create a real link.
+        # Keep the security-branch test meaningful by simulating the filesystem
+        # predicate at exactly this path instead of skipping the assertion.
+        link.write_bytes(b"simulated link entry")
+        original_is_symlink = Path.is_symlink
+
+        def is_symlink(path: Path) -> bool:
+            return path == link or original_is_symlink(path)
+
+        monkeypatch.setattr(Path, "is_symlink", is_symlink)
 
 
 class _Bridge:
@@ -335,16 +360,23 @@ def test_source_resolver_rejects_noncanonical_paths(tmp_path: Path, bad: str) ->
 
 
 @REQUIRES_LIGHTRAG
-def test_source_resolver_rejects_symlink_and_ambiguity(tmp_path: Path) -> None:
+def test_source_resolver_rejects_symlink_and_ambiguity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     pending = pending_root(tmp_path)
     archived = pending / "__parsed__"
     archived.mkdir(parents=True)
     outside = tmp_path / "outside.pdf"
     outside.write_bytes(b"outside")
-    (pending / "doc.pdf").symlink_to(outside)
+    _create_symlink_or_simulate_permission_denied(
+        outside, pending / "doc.pdf", monkeypatch=monkeypatch
+    )
     rag = _resolver(tmp_path)
     with pytest.raises(IngressError, match="missing"):
         rag._resolve_source_file_for_parser("doc.pdf", parser_engine="deeptutor")
+    # The simulated-link patch must not outlive the link itself, or the
+    # ambiguity phase below would still see doc.pdf as a link.
+    monkeypatch.undo()
     (pending / "doc.pdf").unlink()
     (pending / "doc.pdf").write_bytes(b"one")
     (archived / "doc.pdf").write_bytes(b"two")
