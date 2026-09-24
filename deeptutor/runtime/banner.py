@@ -155,7 +155,7 @@ LABELS: dict[str, dict[str, str]] = {
         "start.remedy_parser_models": (
             "If the document parser could not load, its models may be missing: open "
             'Settings -> "Document Parsing" and click "Download models", or run '
-            "`pip install -U \"mineru[all]>=3.4.5\"`."
+            "`pip install -U \"mineru[all]>=3.4.5,<4\"`."
         ),
         "start.remedy_frontend": (
             "If the web UI never came up, rebuild it once and retry: "
@@ -295,7 +295,7 @@ LABELS: dict[str, dict[str, str]] = {
         "start.remedy_parser_models": (
             "如果启动失败是因为文档解析器无法加载,可能是模型未下载:"
             "在 设置 -> 文档解析 中点击 下载模型,"
-            "或执行 `pip install -U \"mineru[all]>=3.4.5\"`。"
+            "或执行 `pip install -U \"mineru[all]>=3.4.5,<4\"`。"
         ),
         "start.remedy_frontend": (
             "如果前端页面始终未就绪,请先重新构建一次再重试: "

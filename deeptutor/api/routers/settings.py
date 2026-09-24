@@ -1342,12 +1342,12 @@ async def start_mineru_models_download(payload: MinerUModelDownloadPayload):
             message = (
                 f"mineru-models-download not found next to the configured CLI "
                 f"(expected {resolved['path']}). The configured install may be "
-                "legacy magic-pdf — upgrade to MinerU >= 3.4.5 for one-click downloads."
+                "legacy magic-pdf — install MinerU >= 3.4.5, < 4 for one-click downloads."
             )
         else:
             message = (
                 "mineru-models-download not found on the server PATH. Install "
-                'current MinerU first (uv pip install -U "mineru[all]>=3.4.5") or set '
+                'supported MinerU 3.x first (uv pip install -U "mineru[all]>=3.4.5,<4") or set '
                 "the CLI path."
             )
         return {"ok": False, "message": message}
@@ -1411,7 +1411,7 @@ async def test_mineru_connection(payload: MinerUSettingsUpdate):
                 "ok": False,
                 "message": (
                     "MinerU CLI not found on the server PATH. Install it "
-                    '(uv pip install -U "mineru[all]>=3.4.5"), set an explicit CLI path, '
+                    '(uv pip install -U "mineru[all]>=3.4.5,<4"), set an explicit CLI path, '
                     "or switch to cloud mode."
                 ),
             }
@@ -1427,8 +1427,8 @@ async def test_mineru_connection(payload: MinerUSettingsUpdate):
                 "ok": False,
                 "message": (
                     f"Local MinerU CLI reported {detail}. DeepTutor needs MinerU >= "
-                    f"{MIN_MINERU_VERSION}; upgrade with "
-                    f"`pip install -U 'mineru[all]>={MIN_MINERU_VERSION}'`."
+                    f"{MIN_MINERU_VERSION}, < 4.0.0; install the supported 3.x CLI with "
+                    f"`pip install -U 'mineru[all]>={MIN_MINERU_VERSION},<4'`."
                 ),
             }
         return {

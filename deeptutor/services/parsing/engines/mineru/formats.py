@@ -7,6 +7,7 @@ import re
 from .._versions import version_at_least
 
 MIN_MINERU_VERSION = "3.4.5"
+MAX_MINERU_VERSION_EXCLUSIVE = "4.0.0"
 
 # Keep this list aligned with ``mineru/cli/common.py`` in the official MinerU
 # project. DeepTutor uses dotted, lower-case suffixes throughout its parser
@@ -31,13 +32,23 @@ MINERU_SUPPORTED_FORMATS = frozenset(
 
 
 def mineru_version_is_current(version_text: str) -> bool:
-    """Whether a MinerU CLI ``--version`` result meets the supported floor."""
+    """Whether a MinerU CLI version is in the supported 3.x range.
+
+    MinerU 4.0 changed the CLI entrypoint, so the current adapter's legacy
+    ``mineru -p ... -o ...`` invocation is only supported through 3.x.
+    """
     match = re.search(r"\d+(?:\.\d+)+", str(version_text or ""))
-    return bool(match) and version_at_least(match.group(0), MIN_MINERU_VERSION)
+    if not match:
+        return False
+    version = match.group(0)
+    return version_at_least(version, MIN_MINERU_VERSION) and not version_at_least(
+        version, MAX_MINERU_VERSION_EXCLUSIVE
+    )
 
 
 __all__ = [
     "MIN_MINERU_VERSION",
+    "MAX_MINERU_VERSION_EXCLUSIVE",
     "MINERU_IMAGE_FORMATS",
     "MINERU_OFFICE_FORMATS",
     "MINERU_PDF_FORMATS",

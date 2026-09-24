@@ -315,10 +315,10 @@ def _rag_check(
 _PARSER_REMEDIES: dict[str, str] = {
     "models_missing": (
         "Download the models from Settings -> Document Parsing, or run "
-        '`pip install -U "mineru[all]>=3.4.5"`.'
+        '`pip install -U "mineru[all]>=3.4.5,<4"`.'
     ),
     "cli_missing": (
-        'Install the engine CLI (for example `pip install -U "mineru[all]>=3.4.5"`), '
+        'Install the supported 3.x engine CLI (for example `pip install -U "mineru[all]>=3.4.5,<4"`), '
         "then re-run `deeptutor doctor startup`."
     ),
     "not_configured": (

@@ -111,6 +111,9 @@ def test_mineru_advertises_current_document_and_image_formats() -> None:
     assert MIN_MINERU_VERSION == "3.4.5"
     assert mineru_version_is_current("mineru, version 3.4.5") is True
     assert mineru_version_is_current("MinerU 3.5.0") is True
+    assert mineru_version_is_current("MinerU 3.4.4") is False
+    assert mineru_version_is_current("MinerU 4.0.0") is False
+    assert mineru_version_is_current("MinerU 4.0.7") is False
     assert mineru_version_is_current("magic-pdf, version 1.3.12") is False
 
 

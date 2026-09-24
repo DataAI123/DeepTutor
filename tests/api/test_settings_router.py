@@ -485,6 +485,16 @@ async def test_mineru_test_connection_local_mode(monkeypatch: pytest.MonkeyPatch
     )
     assert result["ok"] is False
     assert "3.4.5" in result["message"]
+    assert "< 4.0.0" in result["message"]
+
+    # MinerU 4.0 replaced the legacy CLI entrypoint used by this adapter.
+    monkeypatch.setattr(mineru_backend, "local_cli_version", lambda cmd: "mineru, version 4.0.7")
+    result = await settings_router.test_mineru_connection(
+        settings_router.MinerUSettingsUpdate(mode="local")
+    )
+    assert result["ok"] is False
+    assert "3.4.5" in result["message"]
+    assert "< 4.0.0" in result["message"]
 
     # CLI absent → actionable failure message.
     monkeypatch.setattr(
