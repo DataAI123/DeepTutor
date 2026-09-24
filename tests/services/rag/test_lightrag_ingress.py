@@ -294,16 +294,39 @@ def test_authenticated_current_mineru_golden_maps_from_public_artifacts(tmp_path
     provenance = json.loads(
         (capture / "deeptutor-fixture-provenance.json").read_text(encoding="utf-8")
     )
-    source = (capture / provenance["source"]["path"]).resolve()
+    reproduction = provenance["reproduction_fixture"]
+    source = (capture / reproduction["path"]).resolve()
+    returned_origin = capture / reproduction["render_equivalent_to"]
 
     assert provenance["capture_schema"] == 1
     assert provenance["authenticated"] is True
     assert provenance["service"] == "https://mineru.net/api/v4"
-    assert hashlib.sha256(source.read_bytes()).hexdigest() == provenance["source"]["sha256"]
+    captured_source_hash = provenance["source"]["sha256"]
+    assert len(captured_source_hash) == 64
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == reproduction["sha256"]
+    assert reproduction["sha256"] != captured_source_hash
     for relative, expected_digest in provenance["artifacts"].items():
         artifact = capture / relative
         assert artifact.is_file()
         assert hashlib.sha256(artifact.read_bytes()).hexdigest() == expected_digest
+
+    # ReportLab regeneration changed PDF bytes; verify the test source matches
+    # MinerU's returned origin document at the text and rendered-pixel levels.
+    import pymupdf
+
+    source_doc = pymupdf.open(source)
+    returned_doc = pymupdf.open(returned_origin)
+    assert len(source_doc) == len(returned_doc)
+    assert [page.get_text() for page in source_doc] == [
+        page.get_text() for page in returned_doc
+    ]
+    assert [
+        page.get_pixmap(matrix=pymupdf.Matrix(1, 1), alpha=False).samples
+        for page in source_doc
+    ] == [
+        page.get_pixmap(matrix=pymupdf.Matrix(1, 1), alpha=False).samples
+        for page in returned_doc
+    ]
 
     markdown, blocks, asset_dir = parsing_cache.load_ir(capture)
     assert blocks is not None
@@ -318,7 +341,7 @@ def test_authenticated_current_mineru_golden_maps_from_public_artifacts(tmp_path
             blocks=blocks,
             asset_dir=asset_dir,
             engine="mineru",
-            source_hash=provenance["source"]["sha256"],
+            source_hash=reproduction["sha256"],
             parser_signature=provenance["model_version"],
         ),
     )

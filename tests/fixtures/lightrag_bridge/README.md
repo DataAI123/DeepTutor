@@ -5,7 +5,12 @@ DeepTutor test material licensed under the repository's Apache-2.0 license. It
 contains only synthetic text, an equation, a small table, and a drawn rectangle;
 it has no third-party document content.
 
-Generated file SHA-256: `e2abd3404f3a03d90c36feec19786689892434e730841cbdbd2a1a28875f3a80`.
+Generated file SHA-256: `cace4c066ffe7bfde75d0a3b904af991343b31a6eb7afdcf97f41da790dee25b`.
+
+The authenticated MinerU capture provenance records the bytes uploaded at the
+time (`source.sha256`). The checked-in PDF was regenerated later and is not
+byte-identical; `reproduction_fixture` records its hash and the returned
+MinerU-origin PDF used to verify identical extracted text and rendered pixels.
 
 Golden parser outputs in this directory must record the exact source commit or
 authenticated MinerU API capture date, response schema/version, capture command,

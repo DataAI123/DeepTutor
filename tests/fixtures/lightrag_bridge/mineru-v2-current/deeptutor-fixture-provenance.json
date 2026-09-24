@@ -18,5 +18,10 @@
   "source": {
     "path": "../original.pdf",
     "sha256": "e2abd3404f3a03d90c36feec19786689892434e730841cbdbd2a1a28875f3a80"
+  },
+  "reproduction_fixture": {
+    "path": "../original.pdf",
+    "sha256": "cace4c066ffe7bfde75d0a3b904af991343b31a6eb7afdcf97f41da790dee25b",
+    "render_equivalent_to": "a5d0461c-c073-4d71-944c-e79759a67637_origin.pdf"
   }
 }
