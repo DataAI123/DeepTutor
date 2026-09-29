@@ -50,6 +50,13 @@ def _build_app() -> FastAPI:
     return app
 
 
+def _disable_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+    # require_admin reads this module global at call time; without the patch the
+    # test outcome would track the developer's data/user/settings/auth.json.
+    auth_module = importlib.import_module("deeptutor.api.routers.auth")
+    monkeypatch.setattr(auth_module, "AUTH_ENABLED", False)
+
+
 def test_knowledge_source_error_translation_is_consistent_and_sanitized() -> None:
     translate = knowledge_router_module._knowledge_source_errors
 
@@ -2110,6 +2117,7 @@ def _patch_weknora_probe(monkeypatch, *, ok: bool, error: str | None = None) -> 
 
 
 def test_weknora_probe_and_connect_endpoints(monkeypatch, tmp_path: Path) -> None:
+    _disable_auth(monkeypatch)
     manager = _FakeKBManager(tmp_path / "knowledge_bases")
     monkeypatch.setattr(knowledge_router_module, "get_kb_manager", lambda: manager)
     _patch_weknora_probe(monkeypatch, ok=True)
@@ -2161,6 +2169,7 @@ def test_weknora_connection_routes_are_admin_gated() -> None:
 
 
 def test_connect_weknora_rejects_failed_probe(monkeypatch, tmp_path: Path) -> None:
+    _disable_auth(monkeypatch)
     manager = _FakeKBManager(tmp_path / "knowledge_bases")
     monkeypatch.setattr(knowledge_router_module, "get_kb_manager", lambda: manager)
     _patch_weknora_probe(monkeypatch, ok=False, error="Knowledge base missing")
