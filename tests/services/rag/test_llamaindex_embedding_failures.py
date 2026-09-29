@@ -260,9 +260,7 @@ async def test_search_reports_ok_state_for_matching_nodes(
     assert result["provider"] == "llamaindex"
     assert result["retrieval_status"] == "ok"
     assert result["source_count"] == 2
-    assert result["evidence_chars"] == sum(
-        len(node.node.text.strip()) for node in nodes
-    )
+    assert result["evidence_chars"] == sum(len(node.node.text.strip()) for node in nodes)
     assert result["content"]
 
 

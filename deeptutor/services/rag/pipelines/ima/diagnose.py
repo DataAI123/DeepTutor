@@ -126,9 +126,7 @@ async def diagnose_knowledge_base(
 
     entry = load_kb_config_entry(kb_base_dir, kb_name)
     report.credential_source = _credential_source(entry)
-    report.knowledge_base_id_fingerprint = _fingerprint(
-        str(entry.get("knowledge_base_id") or "")
-    )
+    report.knowledge_base_id_fingerprint = _fingerprint(str(entry.get("knowledge_base_id") or ""))
 
     try:
         resolve_kb_config(entry)
@@ -184,7 +182,9 @@ def _credential_source(entry: dict[str, Any]) -> str:
         return CREDENTIAL_SOURCE_KB
     if client_id or api_key:
         return CREDENTIAL_SOURCE_MIXED
-    return CREDENTIAL_SOURCE_ACCOUNT if get_account_credentials().complete else CREDENTIAL_SOURCE_NONE
+    return (
+        CREDENTIAL_SOURCE_ACCOUNT if get_account_credentials().complete else CREDENTIAL_SOURCE_NONE
+    )
 
 
 def _fingerprint(value: str) -> Optional[str]:

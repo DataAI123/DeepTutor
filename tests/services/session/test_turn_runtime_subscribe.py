@@ -892,9 +892,7 @@ async def test_repeated_mastery_start_turn_does_not_mint_a_second_session(
     await store.update_turn_status(first_turn["id"], "cancelled", "Turn cancelled")
     LearningStore().release_path_lease("topic-a", turn_id=first_turn["id"])
 
-    _, second_turn = await runtime.start_turn(
-        _mastery_payload(first_turn["session_id"], "topic-a")
-    )
+    _, second_turn = await runtime.start_turn(_mastery_payload(first_turn["session_id"], "topic-a"))
 
     assert second_turn["session_id"] == first_turn["session_id"]
     assert len(await store.list_sessions()) == 1

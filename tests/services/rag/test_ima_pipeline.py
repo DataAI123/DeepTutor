@@ -1007,9 +1007,7 @@ class TestSearchDiagnostics:
 # ---------------------------------------------------------------------------
 
 
-def _account_settings(
-    monkeypatch, tmp_path, *, client_id: str = "", api_key: str = ""
-) -> None:
+def _account_settings(monkeypatch, tmp_path, *, client_id: str = "", api_key: str = "") -> None:
     """Point the account-level IMA settings at a throwaway file."""
     import deeptutor.services.config as config_module
     from deeptutor.services.config.runtime_settings import RuntimeSettingsService
@@ -1043,15 +1041,11 @@ class TestWireObserver:
         def handler(request: httpx.Request) -> httpx.Response:
             return _ok({"info_list": [], "is_end": True, "next_cursor": ""})
 
-        client = ImaClient(
-            CONFIG, transport=httpx.MockTransport(handler), observer=events.append
-        )
+        client = ImaClient(CONFIG, transport=httpx.MockTransport(handler), observer=events.append)
 
         asyncio.run(client.search_knowledge("q", limit=5))
 
-        assert events == [
-            ImaWireEvent(method="search_knowledge", status_code=200, code=0)
-        ]
+        assert events == [ImaWireEvent(method="search_knowledge", status_code=200, code=0)]
 
     def test_a_rejected_call_is_recorded_before_it_raises(self) -> None:
         events: list[ImaWireEvent] = []
@@ -1059,9 +1053,7 @@ class TestWireObserver:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, json={"retcode": 20004, "errmsg": "bad key"})
 
-        client = ImaClient(
-            CONFIG, transport=httpx.MockTransport(handler), observer=events.append
-        )
+        client = ImaClient(CONFIG, transport=httpx.MockTransport(handler), observer=events.append)
 
         with pytest.raises(ImaAuthError):
             asyncio.run(client.search_knowledge("q", limit=5))
@@ -1167,9 +1159,7 @@ class TestDiagnoseKnowledgeBase:
         query = "a unique phrase"
 
         plain = asyncio.run(diagnose_knowledge_base(base, "IMA", query))
-        redacted = asyncio.run(
-            diagnose_knowledge_base(base, "IMA", query, redact_query=True)
-        )
+        redacted = asyncio.run(diagnose_knowledge_base(base, "IMA", query, redact_query=True))
 
         assert plain.query == query
         assert plain.query_redacted is False
@@ -1205,9 +1195,7 @@ class TestDiagnoseKnowledgeBase:
             return ImaClient(config, transport=httpx.MockTransport(handler), observer=observer)
 
         report = asyncio.run(
-            diagnose_knowledge_base(
-                base, "IMA", "a unique phrase", client_builder=builder
-            )
+            diagnose_knowledge_base(base, "IMA", "a unique phrase", client_builder=builder)
         )
 
         assert report.configured is True
@@ -1252,9 +1240,7 @@ class TestDiagnoseKnowledgeBase:
         def builder(config, observer):
             return ImaClient(config, transport=httpx.MockTransport(handler), observer=observer)
 
-        report = asyncio.run(
-            diagnose_knowledge_base(base, "IMA", "phrase", client_builder=builder)
-        )
+        report = asyncio.run(diagnose_knowledge_base(base, "IMA", "phrase", client_builder=builder))
         dumped = json.dumps(report.to_dict(), ensure_ascii=False)
 
         assert "super-secret-key" not in dumped
@@ -1263,6 +1249,4 @@ class TestDiagnoseKnowledgeBase:
         assert "kb-1" not in dumped
         assert report.retrieval_status == "error"
         assert report.error_type == "retrieval_error"
-        assert report.remote == [
-            {"method": "search_knowledge", "status_code": 200, "code": 20004}
-        ]
+        assert report.remote == [{"method": "search_knowledge", "status_code": 200, "code": 20004}]

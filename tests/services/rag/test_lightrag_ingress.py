@@ -181,9 +181,7 @@ def test_bundle_payload_rejects_a_symlinked_parent(
         ingress.load_verified_bundle(working, "notes.md")
 
 
-def test_source_and_assets_reject_links(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_source_and_assets_reject_links(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     source = tmp_path / "source.pdf"
     source.write_bytes(b"pdf")
     hardlink = tmp_path / "hardlink.pdf"
@@ -351,15 +349,11 @@ def test_authenticated_current_mineru_golden_maps_from_public_artifacts(tmp_path
     source_doc = pymupdf.open(source)
     returned_doc = pymupdf.open(returned_origin)
     assert len(source_doc) == len(returned_doc)
-    assert [page.get_text() for page in source_doc] == [
-        page.get_text() for page in returned_doc
-    ]
+    assert [page.get_text() for page in source_doc] == [page.get_text() for page in returned_doc]
     assert [
-        page.get_pixmap(matrix=pymupdf.Matrix(1, 1), alpha=False).samples
-        for page in source_doc
+        page.get_pixmap(matrix=pymupdf.Matrix(1, 1), alpha=False).samples for page in source_doc
     ] == [
-        page.get_pixmap(matrix=pymupdf.Matrix(1, 1), alpha=False).samples
-        for page in returned_doc
+        page.get_pixmap(matrix=pymupdf.Matrix(1, 1), alpha=False).samples for page in returned_doc
     ]
 
     markdown, blocks, asset_dir = parsing_cache.load_ir(capture)

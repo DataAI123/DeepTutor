@@ -345,17 +345,13 @@ def register(app: typer.Typer) -> None:
 
         try:
             report = asyncio.run(
-                diagnose_knowledge_base(
-                    str(mgr.base_dir), name, query, redact_query=redact_query
-                )
+                diagnose_knowledge_base(str(mgr.base_dir), name, query, redact_query=redact_query)
             )
         except Exception as exc:
             console.print(f"[red]Diagnose failed: {exc}[/]")
             raise typer.Exit(code=1) from exc
 
-        console.print_json(
-            json.dumps(report.to_dict(), indent=2, ensure_ascii=False, default=str)
-        )
+        console.print_json(json.dumps(report.to_dict(), indent=2, ensure_ascii=False, default=str))
 
     # ── GitHub source commands ──────────────────────────────────────
 
