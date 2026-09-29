@@ -16,3 +16,6 @@ docker-compose.*.yml text eol=lf
 *.toml text eol=lf
 *.cfg text eol=lf
 *.ini text eol=lf
+
+# Fixtures carry sha256 provenance; store exact bytes so hashes match on every platform.
+tests/fixtures/** -text
