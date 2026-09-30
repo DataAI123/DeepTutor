@@ -23,33 +23,33 @@ type Palette = {
 };
 
 const PALETTES: Record<Theme, Palette> = {
-  // theme id "light" applies no class → :root Cream palette (warm parchment,
-  // the default; renamed from generic "Light" to honestly signal its warmth)
+  // theme id "light" applies no class → :root Paper palette (cool off-white canvas,
+  // brand-blue primary)
   light: {
-    bg: "#fdfcf9",
-    fg: "#1c1816",
+    bg: "#f4f3f1",
+    fg: "#1e232c",
     card: "#ffffff",
-    primary: "#b0501e",
-    muted: "#f1ede2",
-    border: "#e6decc",
+    primary: "#4176e6",
+    muted: "#e9e8e6",
+    border: "#e0dfdd",
   },
-  // theme id "snow" applies the .theme-snow class → "Default": pure-white
-  // neutral palette, grey surfaces, blue primary (Codex-style chrome)
+  // theme id "snow" applies the .theme-snow class → "Default": DeepSeek canvas —
+  // cool near-white bg, ink text, brand blue primary
   snow: {
-    bg: "#ffffff",
-    fg: "#0d0d0d",
+    bg: "#f9f8f8",
+    fg: "#1e232c",
     card: "#ffffff",
-    primary: "#2563eb",
-    muted: "#f2f2f2",
-    border: "#e5e5e5",
+    primary: "#4176e6",
+    muted: "#efeeed",
+    border: "#e2e4e9",
   },
   dark: {
-    bg: "#1a1918",
-    fg: "#e8e4de",
-    card: "#242220",
-    primary: "#d4734b",
-    muted: "#2a2725",
-    border: "#3a3634",
+    bg: "#161a22",
+    fg: "#e6eaf1",
+    card: "#1e232c",
+    primary: "#6b93ef",
+    muted: "#232a35",
+    border: "#2a313d",
   },
   glass: {
     bg: "#0e0d1a",

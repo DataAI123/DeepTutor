@@ -7,7 +7,7 @@
  */
 
 export const PARTNER_COLORS = [
-  "#b0501e", // ember (primary-adjacent)
+  "#4176e6", // brand blue (primary-adjacent)
   "#8c6a2f", // ochre
   "#4f7a5b", // moss
   "#3d6b8a", // lake

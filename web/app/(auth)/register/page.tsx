@@ -56,7 +56,7 @@ export default function RegisterPage() {
       {/* Logo / Title */}
       <div className="text-center mb-8">
         <h1 className="font-serif text-2xl font-semibold text-[var(--foreground)] tracking-tight">
-          DeepTutor
+          EnjoyLearning
         </h1>
         <p className="mt-1 text-sm text-[var(--muted-foreground)]">
           {t("Create your account")}
@@ -65,7 +65,7 @@ export default function RegisterPage() {
 
       {/* First-user notice */}
       {!checkingFirst && isFirst && (
-        <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-600 dark:text-blue-400">
+        <div className="mb-4 rounded-lg border border-[var(--info)]/30 bg-[var(--info-surface)] px-4 py-3 text-sm text-[var(--info-foreground)]">
           <strong>{t("First user:")}</strong>{" "}
           {t(
             "You will be granted admin privileges and can manage other users from the admin dashboard.",
@@ -153,7 +153,7 @@ export default function RegisterPage() {
 
           {/* Error message */}
           {error && (
-            <p className="text-sm text-red-500 bg-red-500/10 rounded-lg px-3 py-2">
+            <p className="rounded-lg bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-3 py-2 text-sm text-[var(--destructive)]">
               {error}
             </p>
           )}
@@ -162,11 +162,11 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 rounded-lg font-medium text-sm
+            className="w-full py-2.5 px-4 rounded-full font-medium text-sm
                        bg-[var(--primary)] text-[var(--primary-foreground)]
-                       hover:opacity-90 active:opacity-80
+                       hover:brightness-95 active:brightness-90
                        disabled:opacity-50 disabled:cursor-not-allowed
-                       transition-opacity"
+                       transition-[filter] duration-[var(--motion-fast)]"
           >
             {loading ? t("Creating account…") : t("Create account")}
           </button>
@@ -184,7 +184,7 @@ export default function RegisterPage() {
       </p>
 
       <p className="mt-3 text-center text-xs text-[var(--muted-foreground)]">
-        DeepTutor · Agent-Native Learning
+        EnjoyLearning · Agent-Native Learning
       </p>
     </div>
   );

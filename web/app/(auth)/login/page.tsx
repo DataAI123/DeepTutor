@@ -65,7 +65,7 @@ function LoginPageContent() {
       {/* Logo / Title */}
       <div className="text-center mb-8">
         <h1 className="font-serif text-2xl font-semibold text-[var(--foreground)] tracking-tight">
-          DeepTutor
+          EnjoyLearning
         </h1>
         <p className="mt-1 text-sm text-[var(--muted-foreground)]">
           {t("Sign in to your account")}
@@ -74,7 +74,7 @@ function LoginPageContent() {
 
       {/* Registered success notice */}
       {registered && (
-        <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
+        <div className="mb-4 rounded-lg border border-[var(--success)]/30 bg-[var(--success-surface)] px-4 py-3 text-sm text-[var(--success-foreground)]">
           {t("Account created! Sign in to continue.")}
         </div>
       )}
@@ -132,7 +132,7 @@ function LoginPageContent() {
 
           {/* Error message */}
           {error && (
-            <p className="text-sm text-red-500 bg-red-500/10 rounded-lg px-3 py-2">
+            <p className="rounded-lg bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-3 py-2 text-sm text-[var(--destructive)]">
               {error}
             </p>
           )}
@@ -141,11 +141,11 @@ function LoginPageContent() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 rounded-lg font-medium text-sm
+            className="w-full py-2.5 px-4 rounded-full font-medium text-sm
                        bg-[var(--primary)] text-[var(--primary-foreground)]
-                       hover:opacity-90 active:opacity-80
+                       hover:brightness-95 active:brightness-90
                        disabled:opacity-50 disabled:cursor-not-allowed
-                       transition-opacity"
+                       transition-[filter] duration-[var(--motion-fast)]"
           >
             {loading ? t("Signing in…") : t("Sign in")}
           </button>
@@ -163,7 +163,7 @@ function LoginPageContent() {
       </p>
 
       <p className="mt-3 text-center text-xs text-[var(--muted-foreground)]">
-        DeepTutor · Agent-Native Learning
+        EnjoyLearning · Agent-Native Learning
       </p>
     </div>
   );

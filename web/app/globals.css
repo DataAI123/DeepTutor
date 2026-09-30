@@ -5,8 +5,9 @@
 @layer base {
   /* ────────────────────────────────────────────────────────────────────────
      Theme palettes — four families:
-       • Default (.theme-snow) → pure-white neutral greys, blue accent
-       • Cream (:root) and Dark (.dark) → warm family, terracotta accent
+       • Default (.theme-snow) → cool near-white canvas, brand-blue accent
+       • Cream (:root) and Dark (.dark) → same cool family; Cream is a
+         deeper paper tone, Dark is cool navy-ink
        • Glass (.theme-glass) → translucent purple on near-black
      Tokens that every theme must publish:
        --background, --foreground, --card / --popover (+ their -foreground),
@@ -17,118 +18,116 @@
                      (replaces hardcoded bg-black/40 in components)
    ──────────────────────────────────────────────────────────────────────── */
 
-  /* Cream — near-white warm canvas. Reads as off-white at first glance;
-     the warm tint only surfaces on filled blocks (selected nav, panels)
-     and against the terracotta primary. Inspired by Claude's chrome:
-     keep bg essentially white, save the visible warmth for accents. */
+  /* Paper — cool off-white canvas ("light" id; historically the warm Cream
+     family, re-themed toward the DeepSeek palette). A whisper deeper than
+     Snow so the two light themes stay distinguishable; same brand blue. */
   :root {
     color-scheme: light;
-    --background: #fdfcf9;
-    --foreground: #1c1816;
+    --background: #f4f3f1;
+    --foreground: #1e232c;
     --card: #ffffff;
-    --card-foreground: #1c1816;
+    --card-foreground: #1e232c;
     --popover: #ffffff;
-    --popover-foreground: #1c1816;
-    --primary: #b0501e;
+    --popover-foreground: #1e232c;
+    --primary: #4176e6;
     --primary-foreground: #ffffff;
-    --secondary: #f5f2ea;
-    --secondary-foreground: #1c1816;
-    --muted: #f1ede2;
-    --muted-foreground: #6d645a;
-    --accent: #ece7d8;
-    --accent-foreground: #1c1816;
+    --secondary: #edeceb;
+    --secondary-foreground: #1e232c;
+    --muted: #e9e8e6;
+    --muted-foreground: #67707c;
+    --accent: #e2e6ef;
+    --accent-foreground: #1e232c;
     --destructive: #c53a2c;
     --destructive-foreground: #ffffff;
-    --border: #e6decc;
-    --input: #e6decc;
-    --ring: #b0501e;
-    --overlay: rgba(28, 24, 22, 0.42);
+    --border: #e0dfdd;
+    --input: #e0dfdd;
+    --ring: #4176e6;
+    --overlay: rgba(30, 35, 44, 0.42);
     --success: #237a4b;
     --success-foreground: #14532d;
     --success-surface: #ecf8f0;
     --warning: #a15c00;
     --warning-foreground: #713f12;
     --warning-surface: #fff7df;
-    --info: #2563eb;
+    --info: #4176e6;
     --info-foreground: #1e3a8a;
-    --info-surface: #eff6ff;
+    --info-surface: #eef3fc;
     --surface-raised: #ffffff;
-    --shadow-raised: 0 16px 40px rgba(69, 49, 31, 0.12);
+    --shadow-raised: 0 16px 40px rgba(30, 35, 44, 0.12);
   }
 
-  /* Dark — warm near-black, same terracotta family as Cream. */
+  /* Dark — cool navy-ink, the same blue brand family at night. */
   .dark {
     color-scheme: dark;
-    --background: #1a1918;
-    --foreground: #e8e4de;
-    --card: #242220;
-    --card-foreground: #e8e4de;
-    --popover: #242220;
-    --popover-foreground: #e8e4de;
-    --primary: #d4734b;
-    --primary-foreground: #1a1918;
-    --secondary: #2a2725;
-    --secondary-foreground: #e8e4de;
-    --muted: #2a2725;
-    --muted-foreground: #9b9590;
-    --accent: #302d2a;
-    --accent-foreground: #e8e4de;
-    --destructive: #d44a3c;
+    --background: #161a22;
+    --foreground: #e6eaf1;
+    --card: #1e232c;
+    --card-foreground: #e6eaf1;
+    --popover: #1e232c;
+    --popover-foreground: #e6eaf1;
+    --primary: #6b93ef;
+    --primary-foreground: #0f1420;
+    --secondary: #1b2029;
+    --secondary-foreground: #e6eaf1;
+    --muted: #232a35;
+    --muted-foreground: #8a94a5;
+    --accent: #2a3342;
+    --accent-foreground: #e6eaf1;
+    --destructive: #e05548;
     --destructive-foreground: #ffffff;
-    --border: #3a3634;
-    --input: #3a3634;
-    --ring: #d4734b;
-    --overlay: rgba(0, 0, 0, 0.6);
+    --border: #2a313d;
+    --input: #2a313d;
+    --ring: #6b93ef;
+    --overlay: rgba(8, 10, 14, 0.6);
     --success: #5fd08a;
     --success-foreground: #bbf7d0;
     --success-surface: #173424;
     --warning: #f2b84b;
     --warning-foreground: #fde68a;
     --warning-surface: #3a2c16;
-    --info: #7ba7ff;
+    --info: #7ba0f2;
     --info-foreground: #bfdbfe;
-    --info-surface: #172641;
-    --surface-raised: #2a2826;
+    --info-surface: #1a2440;
+    --surface-raised: #232a35;
     --shadow-raised: 0 16px 44px rgba(0, 0, 0, 0.32);
   }
 
-  /* Default — pure-white neutral canvas (theme id "snow" kept for stored
-     preferences). No tint anywhere: flat #fff bg, plain grey surfaces and
-     borders. The only chroma is the blue primary on interactive accents,
-     in the spirit of Codex/ChatGPT chrome. */
+  /* Default — DeepSeek canvas (theme id "snow" kept for stored preferences).
+     Cool near-white bg, ink text, brand blue primary; hairlines are opaque
+     so Tailwind `/NN` alpha modifiers on var(--border) keep working. */
   .theme-snow {
     color-scheme: light;
-    --background: #ffffff;
-    --foreground: #0d0d0d;
+    --background: #f9f8f8;
+    --foreground: #1e232c;
     --card: #ffffff;
-    --card-foreground: #0d0d0d;
+    --card-foreground: #1e232c;
     --popover: #ffffff;
-    --popover-foreground: #0d0d0d;
-    --primary: #2563eb;
+    --popover-foreground: #1e232c;
+    --primary: #4176e6;
     --primary-foreground: #ffffff;
-    --secondary: #f7f7f7;
-    --secondary-foreground: #0d0d0d;
-    --muted: #f2f2f2;
-    --muted-foreground: #6e6e6e;
-    --accent: #ececec;
-    --accent-foreground: #0d0d0d;
+    --secondary: #f4f3f2;
+    --secondary-foreground: #1e232c;
+    --muted: #efeeed;
+    --muted-foreground: #67707c;
+    --accent: #e6e9f2;
+    --accent-foreground: #1e232c;
     --destructive: #d92d20;
     --destructive-foreground: #ffffff;
-    --border: #e5e5e5;
-    --input: #e5e5e5;
-    --ring: #2563eb;
-    --overlay: rgba(0, 0, 0, 0.4);
+    --border: #e2e4e9;
+    --input: #e2e4e9;
+    --ring: #4176e6;
+    --overlay: rgba(30, 35, 44, 0.42);
     --success: #16794b;
     --success-foreground: #14532d;
     --success-surface: #ecfdf3;
     --warning: #a15c00;
     --warning-foreground: #713f12;
     --warning-surface: #fffaeb;
-    --info: #2563eb;
+    --info: #4176e6;
     --info-foreground: #1e3a8a;
-    --info-surface: #eff6ff;
+    --info-surface: #eef3fc;
     --surface-raised: #ffffff;
-    --shadow-raised: 0 16px 40px rgba(13, 13, 13, 0.12);
+    --shadow-raised: 0 12px 32px rgba(30, 35, 44, 0.1);
   }
 
   /* Glass — translucent purple panels on near-black. Slightly brighter
@@ -268,6 +267,38 @@
   .surface-raised {
     background: var(--surface-raised);
     box-shadow: var(--shadow-raised);
+  }
+
+  /* The chat hero glyph ships as the black wordmark mark; on the cool dark
+     and glass canvases it inverts to near-white so it stays readable. */
+  .dark .logo-ink-invert,
+  .theme-glass .logo-ink-invert {
+    filter: invert(1);
+  }
+
+  /* Chat empty-state atmosphere: a faint brand-blue haze sitting behind the
+     greeting, DeepSeek-style. Mounted only on the no-messages hero, so it
+     disappears as soon as the thread has content. */
+  .chat-hero-haze::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(
+      70% 62% at 50% 58%,
+      color-mix(in srgb, var(--primary) 9%, transparent) 0%,
+      transparent 72%
+    );
+  }
+
+  .dark .chat-hero-haze::before,
+  .theme-glass .chat-hero-haze::before {
+    background: radial-gradient(
+      70% 62% at 50% 58%,
+      color-mix(in srgb, var(--primary) 14%, transparent) 0%,
+      transparent 72%
+    );
   }
 }
 

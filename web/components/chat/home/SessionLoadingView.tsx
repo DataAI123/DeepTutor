@@ -60,10 +60,10 @@ export default function SessionLoadingView({
       <div className="flex items-center gap-3">
         <img
           src="/logo_black.png"
-          alt="DeepTutor"
+          alt="EnjoyLearning"
           width={32}
           height={32}
-          className="h-8 w-8 select-none"
+          className="logo-ink-invert h-8 w-8 select-none"
           draggable={false}
         />
         {failed ? (

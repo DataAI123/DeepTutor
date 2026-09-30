@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Lora } from "next/font/google";
+import { DM_Sans, Lora } from "next/font/google";
 import "./globals.css";
 import ThemeScript from "@/components/ThemeScript";
 import ToastViewport from "@/components/common/ToastViewport";
 import { AppShellProvider } from "@/context/AppShellContext";
 import { I18nClientBridge } from "@/i18n/I18nClientBridge";
 
-// Geist matches the public site (deeptutor.info) and stays crisp at the
-// small UI sizes the composer/toolbars use, unlike the rounder Jakarta.
-const fontSans = Geist({
+// DM Sans matches the DeepSeek-style chrome: humanist, open apertures,
+// reads cleanly at the small UI sizes the composer/toolbars use.
+const fontSans = DM_Sans({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-sans",
@@ -21,7 +21,7 @@ const fontSerif = Lora({
 });
 
 export const metadata: Metadata = {
-  title: "DeepTutor",
+  title: "EnjoyLearning",
   description: "Agent-native intelligent learning companion",
   icons: {
     icon: [

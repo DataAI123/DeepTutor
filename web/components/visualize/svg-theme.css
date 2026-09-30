@@ -39,7 +39,7 @@
   margin-inline: auto;
 }
 
-/* Use the app sans font (Geist), overriding any font-family on the SVG itself
+/* Use the app sans font (DM Sans), overriding any font-family on the SVG itself
    and the serif (Lora) inherited from a surrounding .prose container. */
 .dt-svg-root,
 .dt-svg-root text {

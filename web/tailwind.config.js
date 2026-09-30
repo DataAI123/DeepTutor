@@ -11,7 +11,7 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        // Geist and Lora are Latin-only. Without an explicit CJK face after
+        // DM Sans and Lora are Latin-only. Without an explicit CJK face after
         // them, Chinese fell through to the browser's generic `serif`/`sans`,
         // which differs per machine and per OS — a serif heading rendered its
         // Latin in Lora and its Chinese in whatever the browser happened to
@@ -91,6 +91,20 @@ module.exports = {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic":
           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
+      },
+      // DeepSeek radius scale: input=10, media=12, panel=16, pill=full.
+      // xl/2xl stay pinned to media/panel so the ~296 existing rounded-xl/
+      // rounded-2xl usages keep their meaning; DEFAULT/sm/md/lg are remapped
+      // (+2px on lg) so form inputs land on 10px without file changes.
+      borderRadius: {
+        none: "0",
+        sm: "6px",
+        DEFAULT: "6px",
+        md: "8px",
+        lg: "10px",
+        xl: "12px",
+        "2xl": "16px",
+        "3xl": "24px",
       },
     },
   },
