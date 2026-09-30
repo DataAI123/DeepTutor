@@ -86,6 +86,12 @@ web/.next/
 web/.next-deeptutor/
 # Custom distDir builds (DEEPTUTOR_NEXT_DIST_DIR / parallel dev servers)
 web/.next-*/
+# Packaged DeepTutor Web standalone bundle. Upstream checkouts track only
+# deeptutor_web/__init__.py; a locally produced (or pip-provided) standalone
+# payload can be dropped in here so the launcher resolves the packaged
+# frontend instead of running `npm ci` + `next build` in web/.
+deeptutor_web/*
+!deeptutor_web/__init__.py
 # PDF.js decoder files are copied from node_modules for local/dev and release
 # builds; they are dependency-generated assets, not source files.
 web/public/pdfjs/
