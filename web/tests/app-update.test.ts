@@ -165,7 +165,7 @@ test("only non-terminal jobs remain active", () => {
   assert.equal(updateJobIsActive("failed"), false);
 });
 
-test("sidebar presents the version as a synced status dot and branded footer marks", () => {
+test("the sidebar footer carries no version or project-mark chrome", () => {
   const badge = readFileSync(
     path.join(process.cwd(), "components", "sidebar", "VersionBadge.tsx"),
     "utf8",
@@ -175,16 +175,13 @@ test("sidebar presents the version as a synced status dot and branded footer mar
     "utf8",
   );
 
+  // The badge still reports the synced update status for whoever mounts it.
   assert.match(badge, /subscribeAppUpdateStatus/);
   assert.match(badge, /font-serif/);
   assert.match(badge, /bg-emerald-500/);
   assert.match(badge, /bg-amber-500/);
   assert.match(badge, /bg-red-500/);
-  // The footer GitHub mark is now an inline CC0 octocat (kept out of the
-  // app-shell chunk) instead of a lookup into the generated brand table.
-  assert.match(shell, /GitHubMarkLink/);
-  assert.match(shell, /GITHUB_REPO_URL/);
-  assert.match(shell, /GITHUB_MARK_PATH/);
-  assert.match(shell, /text-\[#181717\] dark:text-white/);
-  assert.match(shell, /text-blue-600 dark:text-blue-400/);
+  // Version, documentation and repository links live under Settings › About,
+  // so the shell no longer renders any of them in its footer.
+  assert.doesNotMatch(shell, /VersionBadge|GitHub|DOCS_URL|BookText/);
 });

@@ -50,16 +50,6 @@ export const PRIMARY_NAV: NavEntry[] = [
     requires: "llm",
   },
   {
-    // My Agents is its own top-level feature (pulled out of the Learning
-    // Space): connect a live local Claude Code / Codex to consult in chat,
-    // and manage imported agent conversations. Ungated — managing connections
-    // and imports needs no per-user model grant.
-    href: "/agents",
-    label: "My Agents",
-    icon: Bot,
-    tooltipKey: "Agents tooltip",
-  },
-  {
     href: "/co-writer",
     label: "Co-Writer",
     icon: PenLine,
@@ -90,13 +80,6 @@ export const PRIMARY_NAV: NavEntry[] = [
     requires: "llm",
   },
   {
-    href: "/watching",
-    label: "Immersive Watching",
-    icon: Clapperboard,
-    tooltipKey: "Watch videos with a grounded AI companion.",
-    requires: "llm",
-  },
-  {
     href: "/space",
     label: "Learning Space",
     icon: LayoutGrid,
@@ -104,34 +87,58 @@ export const PRIMARY_NAV: NavEntry[] = [
   },
 ];
 
-/** Consoles that sit under the chat history. Not arrangeable: Settings has to
- *  stay findable, and a console nobody folds away is one less thing to explain. */
+/** The one console row: it owns the second level below it. */
 export const SECONDARY_NAV: NavEntry[] = [
+  { href: "/settings", label: "Settings", icon: Settings },
+];
+
+/**
+ * The second level under Settings — the consoles and the account rows that used
+ * to sit in their own nav rows. They keep their own routes; only the entry
+ * point moved.
+ */
+export const SETTINGS_SUB_NAV: NavEntry[] = [
   {
-    // Memory is its own top-level console (pulled out of the Learning Space):
-    // a place to inspect and curate the tutor's long-term memory, not a daily
-    // workspace. Never gated — memory has no per-user model requirement.
+    // Knowledge Center is a console for managing KBs and retrieval engines, not
+    // a daily workspace. Never gated — embedding / search are shared admin
+    // infrastructure, no per-user model grant needed.
+    href: "/knowledge-bases",
+    label: "Knowledge Center",
+    icon: BookOpen,
+    tooltipKey: "Knowledge tooltip",
+  },
+  {
+    // Memory inspects and curates the tutor's long-term memory. Never gated —
+    // memory has no per-user model requirement.
     href: "/memory",
     label: "Memory",
     icon: Brain,
     tooltipKey: "Memory tooltip",
   },
   {
-    // Knowledge Center sits just above Settings: it's a console for managing
-    // KBs and retrieval engines, not a daily workspace. Never gated — embedding
-    // / search are shared admin infrastructure, no per-user model grant needed.
-    href: "/knowledge-bases",
-    label: "Knowledge Center",
-    icon: BookOpen,
-    tooltipKey: "Knowledge tooltip",
+    // My Agents: connect a live local Claude Code / Codex to consult in chat,
+    // and manage imported agent conversations. Ungated — managing connections
+    // and imports needs no per-user model grant.
+    href: "/agents",
+    label: "My Agents",
+    icon: Bot,
+    tooltipKey: "Agents tooltip",
   },
-  { href: "/settings", label: "Settings", icon: Settings },
+  {
+    href: "/watching",
+    label: "Immersive Watching",
+    icon: Clapperboard,
+    tooltipKey: "Watch videos with a grounded AI companion.",
+  },
 ];
 
 export const PRIMARY_NAV_HREFS = PRIMARY_NAV.map((entry) => entry.href);
 
 export const NAV_BY_HREF = new Map(
-  [...PRIMARY_NAV, ...SECONDARY_NAV].map((entry) => [entry.href, entry]),
+  [...PRIMARY_NAV, ...SECONDARY_NAV, ...SETTINGS_SUB_NAV].map((entry) => [
+    entry.href,
+    entry,
+  ]),
 );
 
 export function isNavActive(pathname: string, href: string) {
