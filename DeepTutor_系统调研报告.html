@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepTutor 系统架构与 Agentic 工作流调研报告</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#1c2333; --muted:#5b6478;
+    --accent:#2f5fd0; --accent2:#7c3aed; --line:#e3e7ef;
+    --code-bg:#eef1f7; --term:#0e7a5f; --warn-bg:#fff7ed; --warn-line:#f5a623;
+    --tip-bg:#1c2333;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.75;font-size:15px}
+  header.hero{background:linear-gradient(135deg,#16224a 0%,#2f5fd0 60%,#7c3aed 100%);color:#fff;padding:42px 8% 36px}
+  header.hero h1{margin:0 0 8px;font-size:26px;letter-spacing:.5px}
+  header.hero p{margin:4px 0;opacity:.92;max-width:960px}
+  header.hero .meta{font-size:12.5px;opacity:.75;margin-top:14px}
+  .layout{display:flex;max-width:1440px;margin:0 auto;gap:24px;padding:24px 3% 80px}
+  nav.toc{position:sticky;top:16px;align-self:flex-start;width:250px;flex-shrink:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 14px;max-height:calc(100vh - 32px);overflow:auto;font-size:13px}
+  nav.toc h3{margin:0 0 8px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+  nav.toc a{display:block;color:var(--ink);text-decoration:none;padding:3.5px 8px;border-radius:6px}
+  nav.toc a:hover{background:var(--code-bg);color:var(--accent)}
+  main{flex:1;min-width:0;max-width:1060px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:26px 30px;margin-bottom:22px}
+  h2{font-size:20px;margin:0 0 14px;padding-bottom:8px;border-bottom:2px solid var(--accent);color:#16224a}
+  h2 .no{color:var(--accent);font-family:Consolas,monospace;margin-right:8px}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--accent2)}
+  h4{font-size:14.5px;margin:16px 0 6px}
+  p{margin:8px 0}
+  code,.path{font-family:Consolas,"JetBrains Mono",monospace;font-size:12.8px;background:var(--code-bg);padding:1.5px 6px;border-radius:5px;color:#31406e}
+  pre{background:#101728;color:#dbe4ff;padding:14px 18px;border-radius:9px;overflow:auto;font-size:12.5px;line-height:1.6}
+  pre code{background:none;color:inherit;padding:0}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:#eef2fb;color:#16224a;font-weight:600}
+  tr:nth-child(even) td{background:#fafbfe}
+  .term{color:var(--term);border-bottom:1.5px dotted var(--term);cursor:help;position:relative;font-weight:600}
+  .term:hover::after,.term:focus::after{content:attr(data-tip);position:absolute;left:0;top:130%;z-index:60;width:min(440px,86vw);background:var(--tip-bg);color:#eef1f7;font-weight:400;font-size:12.5px;line-height:1.6;padding:10px 13px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);white-space:normal}
+  .callout{border-left:4px solid var(--accent);background:#f0f5ff;padding:10px 16px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13.8px}
+  .callout.warn{border-color:var(--warn-line);background:var(--warn-bg)}
+  .callout.good{border-color:#0e9f6e;background:#eefaf4}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:10px;margin-right:4px;vertical-align:1px}
+  .tag.core{background:#2f5fd0;color:#fff}.tag.flow{background:#7c3aed;color:#fff}.tag.infra{background:#0e7a5f;color:#fff}.tag.risk{background:#d64545;color:#fff}
+  .fig{background:#fbfcff;border:1px dashed #c8d2ea;border-radius:10px;padding:16px;margin:14px 0;overflow-x:auto}
+  .fig .cap{font-size:12.5px;color:var(--muted);text-align:center;margin-top:8px}
+  .steps{counter-reset:st;list-style:none;padding-left:0;margin:10px 0}
+  .steps>li{counter-increment:st;position:relative;padding:8px 12px 8px 52px;margin:8px 0;background:#fafbfe;border:1px solid var(--line);border-radius:9px}
+  .steps>li::before{content:counter(st);position:absolute;left:12px;top:10px;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+  .steps>li b:first-child{color:#16224a}
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+  .mini{border:1px solid var(--line);border-radius:9px;padding:12px 14px;background:#fafbfe;font-size:13.5px}
+  .mini h4{margin:0 0 6px;color:var(--accent)}
+  /* ascii arch diagram */
+  .arch{font-family:Consolas,monospace;font-size:12.2px;line-height:1.45;white-space:pre;background:#101728;color:#a9e34b;padding:18px;border-radius:9px;overflow-x:auto}
+  .arch .b{color:#7ab8ff}.arch .g{color:#a9e34b}.arch .y{color:#ffd479}.arch .p{color:#d9a7ff}
+  footer{max-width:1060px;margin:0 auto;padding:0 3% 40px;color:var(--muted);font-size:12.5px}
+  @media(max-width:960px){nav.toc{display:none}.layout{padding:16px}}
+  @media print{nav.toc{display:none}section{break-inside:avoid;border:none;padding:8px 0}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>DeepTutor — 系统架构与 Agentic 工作流调研报告</h1>
+  <p>目的：为后续迭代优化建立完整的系统心智模型。覆盖分层架构、一次提问的端到端时序、Agentic Loop 精确机制、能力/工具两层插件模型、模型接入、RAG、沙箱、前端协议栈、持久化与工程体系，并给出术语注释与技术债清单。</p>
+  <div class="meta">代码库：D:\AI_APP\deeptutor（版本 v1.6.8，浅克隆 HEAD=ab89df6） · 调研日期：2026-09-19 · 所有文件路径均可直接在仓库中跳转验证</div>
+</header>
+
+<div class="layout">
+<nav class="toc">
+  <h3>目录</h3>
+  <a href="#s0">0. 三十秒速览</a>
+  <a href="#s1">1. 分层系统架构</a>
+  <a href="#s2">2. 一次提问的端到端时序</a>
+  <a href="#s3">3. Agentic Loop 核心机制 ★</a>
+  <a href="#s4">4. 两层插件模型：Capability × Tool</a>
+  <a href="#s5">5. 能力详解（11 个 Capability）</a>
+  <a href="#s6">6. 工具体系全景</a>
+  <a href="#s7">7. LLM 提供商接入层</a>
+  <a href="#s8">8. RAG 与知识库</a>
+  <a href="#s9">9. 沙箱执行与安全边界</a>
+  <a href="#s10">10. 记忆系统与 Prompt 体系</a>
+  <a href="#s11">11. 前端架构与流式渲染</a>
+  <a href="#s12">12. 数据持久化与配置</a>
+  <a href="#s13">13. 打包分发与测试体系</a>
+  <a href="#s14">14. 演进方向与技术债 ★</a>
+  <a href="#s15">15. 术语表（附录）</a>
+</nav>
+
+<main>
+
+<!-- ============ 0 ============ -->
+<section id="s0">
+<h2><span class="no">00</span>三十秒速览 <span class="tag core">TL;DR</span></h2>
+<p><b>DeepTutor 是一个“代理原生”（<span class="term" data-tip="Agent-native：系统的核心执行单元不是固定业务流程，而是由 LLM 自主决定调用哪些工具、走哪个阶段流水线的 agent。区别于“先写死流程、AI 只填空”的传统应用。">agent-native</span>）学习辅导系统</b>：三种入口（CLI / WebSocket / Python SDK）汇入同一个 <span class="term" data-tip="Turn（回合）：一次用户提问从提交到答案落盘的完整生命周期。系统所有编排、事件流、租约、取消语义都以 turn 为单位。">Turn</span> 运行时，由 <b>ChatOrchestrator</b> 路由到 11 个 <span class="term" data-tip="Capability（能力）：接管整轮对话的多阶段流水线，如 chat、deep_solve、visualize。两级插件模型中的 Level 2。">Capability</span> 之一，Capability 内部驱动一个最多 8+3 轮的 <b>Agentic Loop</b>（LLM 决策 → <span class="term" data-tip="Tool calling：LLM 以结构化 JSON（OpenAI function schema）请求调用外部函数，系统执行后把结果以 role=tool 消息回填，模型再据此继续。">Tool Calling</span> → 观察 → 再决策），全部过程通过 <b>StreamBus</b> 以 15 种事件实时流出并持久化，前端按序号重放渲染。</p>
+<div class="cols">
+  <div class="mini"><h4>一句话记架构</h4>入口 → TurnEngine → ChatOrchestrator → Capability（整轮接管）或 Tool（单轮调用），共享 StreamBus 事件流 + SQLite 事件日志。</div>
+  <div class="mini"><h4>当前状态判断</h4>v1.6.8 处于<b>收敛硬化期</b>：近 10 个提交 8 个是 fix，聚焦 turn 生命周期正确性、RAG 可诊断性、mastery 会话身份、Windows 启动体验。</div>
+  <div class="mini"><h4>迭代最值得关注的三处</h4>① 循环宿主 <code>agents/loop/</code> 是所有能力的公共心脏；② 6+ 条并行 WebSocket 协议栈是最大结构债；③ <code>knowledge.py</code>(4231行)/<code>ChatStateAdapter.tsx</code>(2919行) 是修改半径最大的热点。</div>
+</div>
+</section>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+<h2><span class="no">01</span>分层系统架构 <span class="tag core">ARCH</span></h2>
+
+<div class="fig"><div class="arch">                        <span class="y">CLI (Typer)</span>        <span class="y">WebSocket /ws (v2 协议)</span>      <span class="y">Python SDK</span>
+                     deeptutor_cli/          api/routers/unified_ws.py        deeptutor/app/facade.py
+                              │                       │                            │
+                              └───────────────────────┼────────────────────────────┘
+                                                      ▼  <span class="g">共同漏斗：三个入口都不直接调编排器</span>
+                            <span class="b">TurnApplicationService</span>（app/service.py — 应用服务层）
+                                                      ▼
+                            <span class="b">TurnRuntimeManager</span>（services/session/turn_runtime.py）
+                  = request_preparer(校验/租约) + context_builder(历史装配) + executor(执行) + lifecycle(事件下发)
+                                                      ▼
+                            <span class="b">TurnEngine</span>（runtime/turn_engine.py，42 行薄接缝，懒导入）
+                                                      ▼
+                            <span class="b">ChatOrchestrator</span>（runtime/orchestrator.py — 唯一路由点）
+                          active_capability 查表 ──▶ <span class="p">CapabilityRegistry</span> ──▶ 11 个 TurnCapability
+                          （默认 chat）              <span class="p">ToolRegistry</span>      ──▶ 60+ 内置/插件/MCP 工具
+                                                      │
+                     全部阶段/思考/工具调用/结果事件写入 <span class="g">StreamBus</span>（runtime/stream_bus.py）
+              每订阅者独立队列 + seq 序号 + 历史重放 ──▶ SQLite turn_events ──▶ WS/CLI/SDK 多消费者断线续传
+                                                      │
+        <span class="y">横切服务层 services/</span>： llm(providers) · rag/embedding · session(SQLite store) · memory(L1/L2/L3)
+              sandbox(bwrap/sidecar/受限子进程) · config(JSON settings) · coordination(memory/redis 租约) · partners(IM 渠道)</div>
+<div class="cap">图 1-1：自顶向下依赖关系（依据 tests/architecture/test_import_boundaries.py 的 import-linter 契约：core 只含值与协议，runtime/services/agents 禁止反向 import api）</div></div>
+
+<h3>1.1 六层职责与依赖方向</h3>
+<table>
+<tr><th>层</th><th>目录</th><th>职责</th><th>关键文件</th></tr>
+<tr><td><b>协议/数据层</b></td><td><code>deeptutor/core/</code></td><td>纯数据结构与抽象协议，<b>禁止</b> import 任何上层（由架构测试强制）</td><td><code>context.py</code>(UnifiedContext) · <code>stream.py</code>(StreamEvent) · <code>capability_protocol.py</code>(TurnCapability) · <code>tool_protocol.py</code>(BaseTool) · <code>turn_request.py</code></td></tr>
+<tr><td><b>运行时层</b></td><td><code>deeptutor/runtime/</code></td><td>编排、事件总线、两类注册表、agentic 循环引擎、多 worker 协调、进程启动器</td><td><code>orchestrator.py</code> · <code>stream_bus.py</code> · <code>registry/</code> · <code>agentic/loop.py</code>+<code>tool_dispatch.py</code> · <code>coordination/</code> · <code>launcher.py</code></td></tr>
+<tr><td><b>服务层</b></td><td><code>deeptutor/services/</code></td><td>LLM 客户端、会话存储、记忆、配置、沙箱、RAG、工作区、partners</td><td><code>llm/</code> · <code>session/</code> · <code>memory/</code> · <code>config/runtime_settings.py</code> · <code>sandbox/</code> · <code>prompt/manager.py</code></td></tr>
+<tr><td><b>能力层</b></td><td><code>deeptutor/agents/</code> + <code>capabilities/</code></td><td>整轮流水线（agents/）与循环扩展、能力自有工具（capabilities/）</td><td><code>agents/loop/</code>(循环宿主) · <code>agents/{chat,question,research,visualize,math_animator}/</code> · <code>capabilities/{solve,mastery,reading,course_study,...}/</code></td></tr>
+<tr><td><b>知识/学习域</b></td><td><code>deeptutor/knowledge/</code> + <code>learning/</code></td><td>知识库生命周期；mastery 学习科学模型（知识点类型、达标闸门、间隔重复）</td><td><code>knowledge/manager.py</code>(2265行) · <code>learning/policy.py</code> · <code>learning/storage.py</code></td></tr>
+<tr><td><b>适配层</b></td><td><code>deeptutor/api/</code> · <code>deeptutor_cli/</code> · <code>deeptutor/app/</code> · <code>web/</code></td><td>只做协议转换与呈现，不碰编排逻辑</td><td><code>api/routers/</code>(43 个) · <code>api/contracts/turn_protocol.py</code> · <code>app/facade.py</code></td></tr>
+</table>
+
+<div class="callout warn"><b>与 AGENTS.md 的三处偏差（以代码为准）：</b>
+① <code>BaseCapability</code> 已是废弃别名，现役协议是 <code>TurnCapability</code>（v3 将移除旧名）；
+② <code>deeptutor/app.py</code> 实为<b>包</b> <code>deeptutor/app/</code>（facade/container/service/contracts）；
+③ 能力实现分散在 <code>agents/</code>（整轮流水线）与 <code>capabilities/</code>（循环扩展+自有工具）两处，并非全在 <code>capabilities/</code> 下。权威能力清单在 <code>runtime/bootstrap/builtin_capabilities.py:35-47</code>。</div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+<h2><span class="no">02</span>一次提问的端到端时序 <span class="tag flow">FLOW</span></h2>
+<p>以 web 端 chat 为例，从浏览器发出消息到答案落盘返回的完整链路（<span class="term" data-tip="时序中的“租约”：turn 开始前向 coordinator（memory 或 redis 后端）申请 turn lease，同一 turn 全集群只有一个 worker 持有执行权；断线/换 worker 凭租约恢复，防止双跑。redis 实现用 Lua 脚本 + fencing token 保证原子性。">租约</span>、<span class="term" data-tip="fan-out：一个生产者（能力执行）产生的事件流同时分发给多个消费者（当前 WS 连接、未来的第二个窗口、CLI 订阅、事件日志持久化）。StreamBus 用“每订阅者一个 asyncio.Queue”实现，并记录各订阅者所在事件循环以支持跨 loop 投递。">fan-out</span> 是理解本层的两把钥匙）：</p>
+
+<ol class="steps">
+<li><b>客户端发送命令</b> — <code>{"type":"message","protocol_version":"2.0","content":"...","capability":"chat",...}</code> 进入 <code>/ws</code>（<code>api/routers/unified_ws.py:41</code>）。握手鉴权 → 强制 <code>PROTOCOL_VERSION=="2.0"</code> → pydantic 判别联合 <code>ClientCommand</code> 校验（<code>api/contracts/turn_protocol.py</code>）。</li>
+<li><b>应用服务受理</b> — <code>TurnApplicationService.start_turn</code>（<code>app/service.py</code>）→ <code>TurnRuntimeManager</code>（按会话缓存的运行时组合体）。</li>
+<li><b>准备阶段</b> — <code>services/session/turns/request_preparer.py:94</code>：模型校验、语言回填、能力路由（<code>route_explicit_quiz_request</code>）、人设与模型选择鉴权、工具白名单回填，然后 <b>申请 turn 租约</b>、<code>store.create_turn</code>，派发后台 asyncio 任务。</li>
+<li><b>上下文装配</b> — <code>turns/executor.py:138</code>：<code>ContextBuilder</code> 拼出 <span class="term" data-tip="conversation_history：真正送给 LLM 的消息列表。滚动摘要（rolling summary）以 role=system 放最前，超预算时裁老消息；regenerate 时按 parent_message_id 做分支截断。">对话历史</span>与摘要，落盘附件并抽取文本，装载 memory/persona/skills/source 清单，最终在 <b>全仓唯一的构造点</b>（<code>executor.py:801-899</code>）生成 <code>UnifiedContext</code>。</li>
+<li><b>编排路由</b> — <code>TurnEngine.execute</code> → <code>ChatOrchestrator.handle</code>（<code>runtime/orchestrator.py:61</code>）：查 <code>CapabilityRegistry</code>（能力名缺省为 chat，<b>每个 turn 新建实例</b>、无跨轮状态）→ 发首帧 <code>session</code> 事件 → 新建 <code>StreamBus</code> 并按 turn_id 注册进全局路由表（供 <code>user_input</code> 命令找回活着的 bus）→ 并行启动“能力执行任务”与“事件订阅生成器”。</li>
+<li><b>能力执行</b> — <code>ChatCapability.run</code> → <code>AgenticLoopPipeline.run</code> → <code>AgentLoop.run</code>：见第 3 章的循环细节。</li>
+<li><b>事件流式下发 + 落盘</b> — 每个事件经 <code>TurnLifecycle._publish_live_event</code>（<code>lifecycle.py:598</code>）盖 session/turn 戳、分配单调 <code>seq</code>、写入 SQLite <code>turn_events</code> 表（<code>UNIQUE(turn_id,seq)</code>）、推给所有实时订阅者。<code>done</code> 事件被暂存，<b>答案落盘之后才发出</b>。</li>
+<li><b>收尾持久化</b> — executor 归一化 provider 响应态 → <code>store.add_message(role="assistant")</code> → 解析 turn 终态 → 发 <code>done{status}</code> → DONE 之后再生成会话标题（<code>session_meta</code>）。服务层特意定义 <code>_POST_DONE_MAX_SECONDS=30</code>，注释直言：<i>“DONE 不是最后一个事件，租约释放才是诚实的流结束信号。”</i></li>
+<li><b>断线重连</b> — 前端重连后发 <code>subscribe_turn + resume_from:{lastSeq}</code>；服务端先回放 SQLite 持久积压，再做 catch-up 重读，最后挂实时队列；若 turn 已终态但缺 done，<b>合成</b> error+done 帧保证客户端状态机闭合（<code>lifecycle.py:341-460</code>）。</li>
+<li><b>取消/异常</b> — 取消经 coordinator 命令队列下发给持有租约的 worker，<code>execution.task.cancel()</code>；executor 捕获 <code>CancelledError</code> 后以 <span class="term" data-tip="asyncio.shield：保护“尽力保存部分答案”的协程不被取消波及——用户按停止键后，模型已生成的半截回答仍会写入数据库而不是丢失。">shielded</span> 方式保存部分答案，终态 <code>cancelled</code>。<b>单个消费者掉线不会杀能力任务</b>（orchestrator 的 finally 只取消“没人读流”场景）。</li>
+</ol>
+
+<h3>2.1 WebSocket v2 协议速查</h3>
+<div class="cols">
+<div class="mini"><h4>客户端 → 服务端命令</h4>
+<code>message/start_turn</code> · <code>subscribe_turn/resume_from</code> · <code>subscribe_session/unsubscribe</code> · <code>check_active_turn</code> · <code>cancel_turn</code> · <code>submit_user_reply</code>(回答 ask_user) · <code>user_input</code>(自由文本注入等待中的 bus) · <code>regenerate</code> · <code>ping</code></div>
+<div class="mini"><h4>服务端 → 客户端事件（15 类）</h4>
+<p><code>session</code> <code>session_meta</code> <code>stage_start</code> <code>stage_end</code> <code>thinking</code> <code>content</code> <code>observation</code> <code>tool_call</code> <code>tool_result</code> <code>progress</code> <code>sources</code> <code>result</code> <code>error</code> <code>wait_for_input</code> <code>done</code> — 定义于 <code>core/stream.py:17-34</code>，线上契约在 <code>api/contracts/turn_protocol.py</code> 镜像同值。</p>
+<p>chat 典型序列：<code>session → stage_start(exploring) → thinking*/tool_call/tool_result* → stage_end → sources → content → result(含 cost_summary) → done → session_meta(标题)</code></p></div>
+</div>
+
+<h3>2.2 UnifiedContext — 全系统的“上下文包”</h3>
+<p><code>core/context.py</code>，每轮唯一构造。要点字段：</p>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td><code>user_message / conversation_history / language</code></td><td>本轮输入、送模型的完整消息列表、语言（决定 prompt 包与输出）</td></tr>
+<tr><td><code>active_capability / config_overrides</code></td><td>路由键与能力级配置（经 <code>validate_capability_config</code> pydantic 校验）</td></tr>
+<tr><td><code>enabled_tools / allowed_builtin_tools</code></td><td>工具开关。<b>语义细分</b>：<code>None</code>=未指定；<code>[]</code>=显式关闭全部可选工具；后者用于隔离 sub-tutor 场景</td></tr>
+<tr><td><code>knowledge_bases / attachments / memory_context / persona_context / skills_manifest / source_manifest</code></td><td>各类“喂给模型的原料”，其中物理工作区路径<b>绝不</b>进入本对象（只存在于 runtime 字段，防泄露）</td></tr>
+<tr><td><code>runtime: TurnRuntimeContext</code></td><td><b>不可序列化</b>的执行环境：turn_id、<code>wait_for_user_reply</code> 回调、provider 响应态、工作区</td></tr>
+<tr><td><code>interaction / capability_output / extension_state / metadata</code></td><td>暂停-恢复标志、能力产物与 <code>answer_published</code> 位、循环扩展命名空间、可序列化兼容面（turn_id、llm_selection、mastery_* 等）</td></tr>
+</table>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+<h2><span class="no">03</span>Agentic Loop 核心机制 ★ <span class="tag flow">FLOW</span></h2>
+<p>这是全系统最重要的复用点：<b>chat、deep_solve、ask_questions、mastery、reading、watching、course_study、visualize(通用路径) 共用同一个循环引擎</b>，差别只在子类参数（prompt 模块、max_rounds、温度）与挂载的 <code>LoopExtension</code>。调用链：</p>
+<pre><code>ChatCapability.run()                          deeptutor/agents/chat/capability.py:27
+ └─ AgenticChatPipeline                        agents/chat/agentic_pipeline.py（纯 re-export 别名）
+     == AgenticLoopPipeline                    agents/loop/pipeline.py（1884 行，循环宿主：组工具、组 prompt、暂停恢复）
+         └─ AgentLoop.run()                    agents/loop/agent_loop.py（1691 行，循环引擎：LLM 调用、分叉、预算）
+             └─ run_agentic_loop()             runtime/agentic/loop.py（协议层单轮：标签校验、违规修复重试）
+                 └─ dispatch_tool_calls()      runtime/agentic/tool_dispatch.py（工具并发分发）</code></pre>
+
+<h3>3.1 循环前准备（8 步）</h3>
+<p><code>AgenticLoopPipeline.run()</code>：确保工作区 → <b>摘出延迟工具</b>（<span class="term" data-tip="渐进披露 / Progressive disclosure：deferred=True 的工具（MCP、外部 CLI 等）不进初始 schema，只在 system prompt 里留一行清单；模型需要时调用 load_tools 现场加载，schema 原地热更新，下一轮即可用。避免工具表撑爆上下文。">deferred tools</span>）→ KB 清单 → 沙箱闸门判定 → <b>工具组合</b>（§3.5）→ 原生 tool-calling 能力判定 → 构建 OpenAI function schema → 启动循环。</p>
+
+<h3>3.2 System Prompt 组装 — 为 Prompt Cache 而生的顺序设计</h3>
+<p><code>agents/loop/prompt_blocks.py · LoopPromptAssembler.blocks()</code> 固定顺序：</p>
+<pre><code>general → runtime_context(只注入“天粒度”日期) → runtime_policy → loop.system(yaml)
+→ 各 LoopExtension.system_block() → 侧栏/课程规范/学习者画像/人设 → partner 策略 → memory
+→ tools(工具说明+KB) → skills → sources → extended_tools(deferred 清单) → notebooks → workspace
+拼接：块间 "\n\n---\n\n"，每块渲染 "## &lt;name&gt;"，末尾追加语言指令(allow_user_override=True)</code></pre>
+<div class="callout good"><b>关键洞察：</b>KB 预检索内容塞进 <b>user 消息</b>而非 system 消息；日期只精确到天。两者都是为了 <b>system prompt 逐字节稳定</b>，命中 provider 的 <span class="term" data-tip="Prompt caching：OpenAI/Anthropic 等对“与前次请求逐字节相同的前缀”按缓存价计费（常见 10 倍差价、延迟大降）。任何一个字节的漂移（如注入了当前时间、随机工具顺序）都会导致整段缓存失效。DeepTutor 的 prompt 组装顺序与 user 消息携带动态内容，都是围绕这一点设计的。">prompt cache</span>。这是后续迭代必须守住的隐含契约。</div>
+
+<h3>3.3 每轮状态机：一次 LLM 流式调用 + 一个分叉</h3>
+<ol class="steps">
+<li><b>调用</b> — <code>_call_llm()</code>：<code>stream=True</code>，带 <code>tools</code> 与 <code>tool_choice</code>（缺省 auto；ask_questions 第 0 轮强制 <code>initial_tool_choice="ask_user"</code>）。流中断按 <code>(0.5s, 1.5s)</code> 退避重试；15 秒无输出发 <code>reasoning_progress</code> 心跳；<code>AskUserDraftEmitter</code> 在<b>流式解析工具参数的同时</b>就把问题卡片推给前端（用户不必等整轮结束）。</li>
+<li><b>分叉</b> — 本轮<b>无</b> tool_calls → 该文本即最终答案（<code>call_role="finish"</code>），经守卫检查后循环退出；<b>有</b> tool_calls → 本轮文本降级为旁白（<code>call_role="narration"</code>，前端展示为“思考过程”而非答案）。</li>
+<li><b>工具分发</b> — 三段有序执行：① <code>rebinding_tools</code> 串行（会改变本轮操作对象的工具，如切换会话/材料）→ ② 其余并发（上限 <code>MAX_PARALLEL_TOOL_CALLS=8</code>，批内按规范化 args 去重，重复调用替换为教学式 stub 文本）→ ③ <code>PAUSE_LAST_TOOLS={ask_user, workspace_export}</code> 永远最后执行（它们要呈现“已跑完的轮次状态”）。发 <code>tool_call</code> 事件时剥离 <code>_</code> 前缀私有参数与 sensitive 参数。</li>
+<li><b>观察回填</b> — 工具结果以 <code>role=tool</code> 消息 append 进 messages——这就是“观察”进入下一轮上下文的唯一通道。随后 <code>_fold_context_checkpoint</code> 做窗口折叠：超过 <code>CONTEXT_WINDOW_GUARD_RATIO=0.9</code> 时裁剪老工具结果并插入“已省略”提示。</li>
+<li><b>协议修复</b> — 非 OpenAI 协议能力（如靠文本标签工作的模型）走 <code>labeled_step.py</code>：标签(THINK/TOOL/FINISH…)前的正文实时流成 thinking，违规输出用 progress 事件标注 <code>protocol_violation</code> 并重试修复。<span class="term" data-tip="DSML 兜底：部分 DeepSeek 式模型不产 native tool_calls 字段，而把工具调用写进正文 XML 里。dsml_tool_calls.py 在无 native 调用时从 content 抽取，作为第二层降级（第三层是拒 schema 时整体去工具重试）。">DSML 兜底</span>同属此层。</li>
+</ol>
+
+<h3>3.4 终止条件穷举（迭代时改循环前先读这张表）</h3>
+<table>
+<tr><th>条件</th><th>常量/位置</th><th>行为</th></tr>
+<tr><td>正常结束</td><td>某轮无 tool_calls 且通过守卫</td><td><code>call_role="finish"</code> → <code>_finalize_finish</code> 返回</td></tr>
+<tr><td>探索预算耗尽</td><td><code>DEFAULT_MAX_ROUNDS = 8</code>（可被 <code>runtime.min_loop_rounds</code> 抬高）</td><td>进入<b>结算阶段</b>：注入 <code>settle_exhausted</code> 指令，令模型停止调工具、基于已有观察作答（<span class="term" data-tip="Settlement（结算轮）：预算耗尽后不强杀循环，而是额外给最多 MAX_SETTLEMENT_ROUNDS=3 轮“只许输出答案”的机会，保证用户总拿到回复而非空结果。">settlement</span>）</td></tr>
+<tr><td>结算仍不收手</td><td><code>MAX_SETTLEMENT_ROUNDS = 3</code></td><td>强制 <code>_forced_finish</code>：一次不带 tools 的纯生成调用</td></tr>
+<tr><td>输出被截断</td><td><code>finish_reason=="length"</code></td><td>append 已有内容 + <code>continue_truncated</code> 指令续写（不计终止）</td></tr>
+<tr><td>只思考不干活</td><td><code>MAX_REASONING_ONLY_RECOVERIES = 2</code></td><td>轻推 → 强推 → 仍空则强制收尾，兜底文本 <code>notices.empty_final_response</code></td></tr>
+<tr><td>能力否决 finish</td><td><code>LoopExtension.finish_instruction()</code></td><td>允许一次改道（如 mastery 识破“假装出了题”），第二次直接拒绝该终答</td></tr>
+<tr><td>工具要求终止</td><td><code>dispatch.terminate</code>（<code>terminate_turn</code>）</td><td>以该工具 content 为终止产物（保留通道，现无内置工具使用）</td></tr>
+<tr><td>用户暂停</td><td><code>dispatch.pause</code>（ask_user / workspace_export）</td><td><b>不终止</b>：等待答复后 continue 同一迭代，见 §3.6</td></tr>
+<tr><td>能力改写终答</td><td><code>final_text_override()</code></td><td>替换对外文本（partner_group 用于剥掉对等请求后重发干净答案）</td></tr>
+</table>
+
+<h3>3.5 工具挂载：ToolMountFlags 四步有序合成</h3>
+<p><code>agents/_shared/tool_composition.py · compose_enabled_tools()</code>：</p>
+<pre><code>① 用户勾选 ∩ 管理员白名单（读 admin interface.json，读取失败 fail-open）
+② 按 ToolMountFlags 条件自动挂载：has_kb→rag/kb_files/knowledge_frontier, has_sources→read_source,
+   has_memory→read_memory, has_notebooks→list_notebook/write_note, has_skills→read_skill,
+   has_deferred_tools→load_tools, has_exec→exec, has_mastery_topics/nav→mastery_*, has_question_bank→question_bank
+③ capability_owned：能力自有工具；exclusive 时【替换】整个工具面（KnowledgeCapability）
+④ 恒定工具：write_memory, web_fetch, github, ask_user, cron
+_finalize：追加 forced、去重、去掉 suppressed（如 partner turn 抑制 read/write_memory）</code></pre>
+<p>注释中的两个细节值得记住：chat 里 <code>has_sources=False</code>（read_source 归 explore_context 预检索通道用）；所有 <code>user_has_*</code> 判定辅助函数<b>一律 fail-closed</b>（判不出来就当没有），与管理端白名单的 fail-open 恰好相反——方向都是“宁可少给不可多给”。</p>
+
+<h3>3.6 ask_user：跨 4 文件的暂停-恢复</h3>
+<ol class="steps">
+<li><code>tools/ask_user.py</code> 返回 <code>ToolResult(pause_for_user=…)</code>（≤4 问、每问 ≤8 选项）；</li>
+<li><code>tool_dispatch.py</code> 汇总为 <code>DispatchOutcome(pause=True, pause_tool_call_id)</code>，一个批次只允许一张待答卡；</li>
+<li><code>pipeline.py:1132 _await_user_reply_and_resolve()</code>：发 <code>pending_user_input</code> 轨迹 → <code>context.runtime.wait_for_user_reply()</code> 挂到 lifecycle 的回复队列（WS 侧由 <code>submit_user_reply</code> 命令注入；跨模块则经 <code>get_bus(turn_id).submit_input()</code>）→ <code>on_user_pause/on_user_resume</code> 扩展钩子；</li>
+<li>把答复<b>重写进对应 role=tool 消息正文</b>，并附 <code>ask_user_resolved_directive</code>（“继续原始请求，不要只回一句确认”）→ 循环 continue，<b>turn 全程存活</b>。IM 渠道语义不同：暂停时待发问题本身就是回复，用户下一条 IM 消息开<b>新</b> turn（<code>services/partners/runtime.py</code>）。</li>
+</ol>
+
+<h3>3.7 结果出口与成本核算</h3>
+<p>所有能力收敛于 <code>agents/_shared/capability_result.py · emit_capability_result()</code>——它只做一件事：把 <code>UsageTracker.summary()</code> 塞进 <code>payload["metadata"]["cost_summary"]</code> 再发 RESULT 事件。<code>UsageTracker</code>（<code>runtime/agentic/usage.py</code>）三口进数：响应真值 usage（流式只取最后一帧）、无 usage 时按 <b>chars/3.5</b> 估算、BaseAgent 适配器手工上报；价格来自 <code>logging/stats/llm_stats.get_pricing</code>。一个循环内所有调用（旁白轮/结算轮/强制收尾/provider 重试/扩展预检索）汇入<b>同一个 tracker</b>；跨能力不合并。</p>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+<h2><span class="no">04</span>两层插件模型：Capability × Tool 与三种扩展口味 <span class="tag core">ARCH</span></h2>
+<h3>4.1 协议契约</h3>
+<table>
+<tr><th>协议</th><th>文件</th><th>要点</th></tr>
+<tr><td><code>TurnCapability</code></td><td><code>core/capability_protocol.py</code></td><td>唯一方法 <code>run(context, stream)</code>；<code>CapabilityManifest</code> 声明 name/stages/tools_used/cli_aliases/request_schema/config_defaults。<b>stages 声明与执行松耦合</b>：声明只是元数据（给 UI/CLI），真实阶段由 <code>async with stream.stage("planning")</code> 上下文管理器驱动，二者无强制校验——加新能力时要自觉遵守。</td></tr>
+<tr><td><code>BaseTool / ToolDefinition</code></td><td><code>core/tool_protocol.py</code></td><td><code>ToolResult</code> 五字段：<code>content/success/sources/metadata/pause_for_user</code>（<code>terminate_turn</code> 已遗留）。参数支持 <code>sensitive</code>（从 trace 扣除，如 cron token）。<code>ToolLookup</code> 协议<b>故意不暴露写方法</b>——能力只能读工具表。</td></tr>
+<tr><td><code>LoopExtension</code></td><td><code>capabilities/protocol.py</code></td><td>挂进 chat 循环的“每轮扩展”：<code>is_active / owned_tools / system_block / augment_kwargs</code> 必需；<code>pre_loop / on_user_pause / finish_instruction / final_text_override / rebinding_tools</code> 可选钩子。</td></tr>
+</table>
+<div class="callout"><b>三种口味一句话分工：</b>TurnCapability = <b>拥有整轮</b>；LoopExtension = <b>借用</b> chat 的整轮并注入行为；KnowledgeCapability（如 Obsidian/IMA）= <b>独占工具面</b>的 LoopExtension（选中其 KB 时替换整个工具表，但保底保留 ask_user + workspace 四件套 + rag/kb_files）。</div>
+
+<h3>4.2 注册与懒加载</h3>
+<p><b>两级懒加载</b>：<code>ToolRegistry.load_builtins()</code> 只登记 <code>BuiltinToolSpec(name, "module:Class")</code> 描述符，首次 get/execute 才 <code>importlib</code> 实例化（<code>tools/builtin_specs.py</code>，60+ 条目，含别名表 <code>pdf→read_source</code>、<code>rag_hybrid/naive/search→rag(mode=…)</code>，实例化时校验“目录漂移”）；<code>CapabilityRegistry.load_builtins()</code> 注册闭包工厂，每次 <code>get()</code> <b>新建实例</b>。外部插件走 entry-point 组 <code>deeptutor.extensions</code>（旧 <code>deeptutor.plugins</code> 兼容并告警）。此外 <code>ScopedToolRegistry</code> 为多租户提供白名单强制层，注释直言“<b>过滤清单不是闸门</b>，execute() 才是唯一强制点”——因为模型可产出任意工具名。</p>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+<h2><span class="no">05</span>能力详解（11 个内置 Capability）<span class="tag core">ARCH</span></h2>
+<table>
+<tr><th>能力 / CLI 别名</th><th>stages（声明）</th><th>实际机制与 stage 间数据通道</th></tr>
+<tr><td><code>chat</code> / chat</td><td>exploring → responding</td><td>纯 Agentic Loop（§3）。system 块来自 <code>agents/chat/prompts/{en,zh}/agentic_chat.yaml</code></td></tr>
+<tr><td><code>mastery_path</code> / mastery</td><td>responding</td><td><b>Guided Learning</b>：chat 循环 + 12 个 mastery_* 工具，双重 gating（见 §5.1）</td></tr>
+<tr><td><code>deep_solve</code> / solve</td><td>responding</td><td><b>并非多阶段流水线</b>——也是 chat 循环 + SolveLoopCapability 扩展 + 三个自有工具 solve_plan/solve_finish_step/solve_replan。计划状态存工具后端（按 solve_session_id 索引），不经 prompt 传递</td></tr>
+<tr><td><code>deep_question</code> / quiz</td><td>ideation → generation</td><td>真流水线（<code>agents/question/pipeline.py</code>）：explore(标签循环≤8轮)→plan(产出 QuizPlan 模板)→逐题生成(每题≤5轮+修复协议)。<b>stage 间传显式 Python 对象</b>，边生成边流题目</td></tr>
+<tr><td><code>deep_research</code> / research</td><td>rephrasing → decomposing → researching → reporting</td><td>decompose 后可返回 <b>outline_preview</b> 两段式确认；research 用 <code>DynamicTopicQueue</code> + <code>CitationManager</code>，<b>stage 间数据 = 队列里的 block 状态 + 引用表</b>；report 分 outline/intro/section/conclusion 四协议。partial 失败发警告并标注 <code>failed_block_*</code></td></tr>
+<tr><td><code>visualize</code> / visualize,viz</td><td>analyzing → generating → reviewing（+manim 6 阶段）</td><td>双路径：manim 类型走 math_animator 同构流水线；否则限制工具面为 8 个安全内建后跑 chat 循环（max_rounds=5），由 <b>submit_visualization 工具</b>写入 <code>context.metadata[VISUALIZATION_RESULT_KEY]</code> 回收结果——<b>跨 stage 通道是 metadata 不是 LLM 文本</b>；无 tool-calling 能力时显式告警</td></tr>
+<tr><td><code>math_animator</code> / animate</td><td>concept_analysis → concept_design → code_generation → code_retry → summary → render_output</td><td>线性六段（需 manim 可选依赖，SDK 以 <code>find_spec("manim")</code> 门控可用性）：analysis→design→code→(渲染失败自动重试并回传 retry_history)→summary。典型“pipeline 而非 loop”</td></tr>
+<tr><td><code>ask_questions</code> / ask</td><td>responding</td><td>chat 循环 + 第 0 轮强制 tool_choice=ask_user 的扩展</td></tr>
+<tr><td><code>immersive_reading</code> / reading</td><td>responding</td><td>7 个 reading/material 工具；另有 entry-point 扩展点 <code>deeptutor.reading_extensions</code>（read_aloud/guided_learning/vocabulary 即内置插件）</td></tr>
+<tr><td><code>course_study</code> / course</td><td>responding</td><td>course_overview/material/edit/handoff 四工具 + 课程规范 prompt 块</td></tr>
+<tr><td><code>immersive_watching</code> / watching</td><td>responding</td><td>视频学习模式，复用 web_search/exec/reason</td></tr>
+</table>
+
+<h3>5.1 mastery_path：学习科学闸门（理解产品差异化必读）</h3>
+<p>知识点四类型 <code>KnowledgeType = memory | concept | procedure | design</code>（<code>learning/models.py</code>），达标策略在 <code>learning/policy.py</code>(442 行)：</p>
+<ul>
+<li><b>量化闸门</b> <code>QUANTITATIVE_GATE</code>：memory/procedure 类必须测验达线（0.9）——“背下来/会算了”用分数证明；</li>
+<li><b>质性评估</b> <code>QUALITATIVE_TYPES</code>：concept/design 类走 <code>mastery_assess</code> 的 <span class="term" data-tip="Feynman 式评估：让学习者用自己的话把概念讲明白，由 LLM 判断理解深度来定“过关”，而非选择题分数。对应概念/设计类知识“讲得清才是真懂”的考核哲学。">Feynman 式</span>通过判定；</li>
+<li><b>间隔重复</b>：<code>due_reviews()</code> 计算到期复习队列（<span class="term" data-tip="Spaced repetition（间隔重复）：基于遗忘曲线，在即将忘记的时间点安排复习，是 Anki 等记忆工具的核心算法。系统据此产生 REVIEW 模式的会话。">spaced repetition</span>）；<code>next_objective()</code> 产出下一步动作（answer_pending|review|probe|practice|assess|complete）；</li>
+<li><b>双重 gating</b>：① 模式三态 OUTLINE/STUDY/REVIEW 把工具限定到模式（build 只在 outline，quiz/grade 只在 study/review），<b>校验发生在调用时而非挂载时</b>（因 schema 每轮只组装一次），越界返回点名“哪个工具能解锁”的引导错误；② 主题类型闸门如上。最近提交密集修 mastery 正是因这套状态机（draft 复用、quiz 交付义务、gate 分数说明）。</li>
+</ul>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+<h2><span class="no">06</span>工具体系全景 <span class="tag core">ARCH</span></h2>
+<h3>6.1 用户可开关（/settings/tools 四+三个）</h3>
+<table>
+<tr><th>工具</th><th>功能</th></tr>
+<tr><td><code>brainstorm</code></td><td>把模糊请求展成多候选方向并各附理由（广度优先）</td></tr>
+<tr><td><code>web_search</code> / <code>paper_search</code></td><td>带引用的网页搜索 / arXiv 论文检索</td></tr>
+<tr><td><code>reason</code></td><td>独立一次<b>无状态深度推理 LLM 调用</b>（<code>tools/reason.py</code>：专用 system prompt“逐步编号推导、不得编造引用”，结果作为观察回填）。用于当前上下文不足以自信作答时；与主循环共享配置但单开一次调用</td></tr>
+<tr><td><code>geogebra_analysis</code> / <code>imagegen</code> / <code>videogen</code></td><td>几何题视觉+符号解析（VisionSolverAgent, 240s 超时）/ 文生图 / 文生视频</td></tr>
+</table>
+<h3>6.2 上下文门控自动挂载（chat 循环按 ToolMountFlags 装卸）</h3>
+<p><code>rag</code>(KB 检索,带 <code>_rag_sources</code> 溯源) · <code>read_source</code>(读本轮附件原文,别名 pdf) · <code>kb_files</code> · <code>knowledge_frontier</code>(报告 KB 未覆盖面) · <code>read_memory</code>/<code>write_memory</code>(L3 记忆,写 L1 轨迹,重复内容返回去重提示) · <code>list_notebook</code>/<code>write_note</code> · <code>read_skill</code>(读 SKILL.md) · <code>load_tools</code>(渐进披露钥匙) · <code>exec</code>(沙箱执行,§9) · <code>web_fetch</code>/<code>github</code>(只读 gh CLI)/<code>cron</code>(定时任务 at/every_seconds/cron_expr) · <code>ask_user</code> · <code>workspace_list/read/search/present/export</code>(export 需精确标签批准且只导一次) · <code>question_bank</code> · mastery_nav×4。</p>
+<h3>6.3 能力自有工具（随能力装卸，不属通用面）</h3>
+<p>mastery_*×12（status/build/revise/quiz/grade/skip_question/assess/mode/profile/paths/switch/leave）· solve_*×3 · reading×7 · course×4 · obsidian_*×9 · marginnote*×7 · ima_*×5 · subagent <code>consult_subagent</code> · partner 系列（propose_partner/invoke_other/partner_read/memorize/search）· setup×4 · <code>submit_visualization</code>。</p>
+<div class="callout"><b>设计规律：</b>“能力 = 循环宿主配置 + 一组自有工具 + 一段 system 块”。新增一种教学模式的标准姿势是写 LoopExtension + 自有工具，而不是另起一条流水线——deep_solve 是最佳范本（<code>capabilities/solve/</code> 全文极小）。</div>
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="s7">
+<h2><span class="no">07</span>LLM 提供商接入层 <span class="tag infra">INFRA</span></h2>
+<ul>
+<li><b>后端 6 类</b>（<code>services/provider_registry.py</code>）：<code>openai_compat / anthropic / azure_openai / openai_codex / github_copilot / codebuddy</code>；条目覆盖 OpenRouter、硅基流动、DeepSeek、火山、Ollama/LM-Studio/vLLM/llama_cpp（本地，<code>is_local</code>）等 20+。</li>
+<li><b>统一手法——“把非 OpenAI 伪装成 OpenAI”</b>：<code>_ProviderOpenAIAdapter</code>（<code>runtime/agentic/client.py</code>, 775 行）将 Anthropic 等响应重铸为 OpenAI 形状 chunk；推理内容（reasoning_content / Anthropic 签名 thinking_blocks）跨轮回放（否则 Anthropic 拒绝带 thinking 的历史）；工具参数增量走侧通道供 ask_user 流式卡片。</li>
+<li><b>native tool-calling 五步裁决</b>：能力覆盖 → 后端在白名单 → 本地 binding 一律不信任 → 显式 supports_tools → 云端 OpenAI 兼容默认具备。失败降级三层：去 tools 重试 → DSML 正文抽取 → 标签协议。</li>
+<li><b>运维细节</b>：<code>KeyPool</code> 密钥轮换；有界 provider 池（size 2）+ 隔离 provider；<code>model_overrides_for</code> 后写覆盖（值 None = 删除该键）；Codex OAuth / CodeBuddy 授权流在 <code>api/routers/settings.py</code>。</li>
+</ul>
+</section>
+
+<!-- ============ 8 ============ -->
+<section id="s8">
+<h2><span class="no">08</span>RAG 与知识库 <span class="tag infra">INFRA</span></h2>
+<ul>
+<li><b>多引擎并存</b>：<code>deeptutor/services/rag/</code> + 6 条 pipeline —— <b>llamaindex</b>（默认，向量 JSON 持久化在 <code>data/knowledge_bases/&lt;kb&gt;/version-1/</code>：vector_store/docstore/graph_store 等，<b>无独立向量数据库服务</b>）、<b>pageindex</b>（外部 OSS，生成时惰性校验配置）、<b>graphrag</b>、<b>lightrag / lightrag-server</b>（外部服务指针）、<b>ima</b>（腾讯 IMA 远端知识库）。引擎与凭据在 <code>data/user/settings/*.json</code> 分节，REST 端点在 <code>api/routers/knowledge.py</code>（六条 pipeline 各有 GET/PUT config）。</li>
+<li><b>嵌入版本治理</b>：<code>knowledge/manager.py</code> 维护 <code>(model_name, dimension)</code> 指纹与 <code>embedding_mismatch / needs_reindex</code> 标志——换嵌入模型后老索引不会静默出错，而是标记待重建。</li>
+<li><b>文档解析按文件路由</b>（近期 fix 55e20d2）：MinerU / docling / tika / pymupdf4llm 等多引擎按文件类型选择而非全局默认；PDF 转图/解析在读取端配 pdf.js（§11）。</li>
+<li><b>可诊断性是最近的投入方向</b>（feat 26ee7c0 / fix c754dc1）：检索状态三态化（无命中 ≠ 弱证据 ≠ 检索错误），IMA 诊断输出<b>脱敏</b>（绝不外泄 API key 与签名 URL），统一 retrieval status 事件。</li>
+<li><b>检索入口</b>：<code>tools/rag_tool.py</code> 暴露 <code>rag_search/initialize_rag/delete_rag/get_available_providers</code>；KB 预检索结果以 <code>knowledge_base_seed</code> 块注入 user 消息（§3.2）。</li>
+</ul>
+</section>
+
+<!-- ============ 9 ============ -->
+<section id="s9">
+<h2><span class="no">09</span>沙箱执行与安全边界 <span class="tag infra">INFRA</span></h2>
+<p><code>deeptutor/services/sandbox/</code>——“一个隔离机制一个类”，由 <code>SandboxService</code> 门面统一：</p>
+<table>
+<tr><th>后端</th><th>机制</th><th>隔离级别</th></tr>
+<tr><td><code>RunnerSidecarBackend</code></td><td>HTTP 提交给独立 runner sidecar 容器执行</td><td>最强（进程外）</td></tr>
+<tr><td><code>BwrapBackend</code></td><td>Linux <code>bwrap</code>（bubblewrap）挂载命名空间：只读 bind venv/基础 Python 运行时、干净 PATH</td><td>强</td></tr>
+<tr><td><code>RestrictedSubprocessBackend</code></td><td>清理环境变量的普通子进程（Windows 主路径，受 <code>DEEPTUTOR_SANDBOX_ALLOW_SUBPROCESS</code> 控制）</td><td>弱</td></tr>
+</table>
+<p>三道闸门：① <code>exec_capability_available()</code> 决定 exec 工具是否挂载（ToolMountFlags.has_exec）；② <code>isolation_level</code> 决定策略档位——SYSTEM 级命令给所有人、APPLICATION 级仅管理员；③ <code>UserExecQuota</code> 每用户并发/每分钟次数配额。工作区契约：<b>物理路径只存在于运行时</b>，模型消息、持久化元数据、对外 URL 中只出现 <code>outputs/</code> 逻辑路径（<code>core/context.py:34-46</code> docstring 明言）。</p>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+<h2><span class="no">10</span>记忆系统与 Prompt 体系 <span class="tag infra">INFRA</span></h2>
+<h3>10.1 三层记忆（data/memory/，前端 /memory/{l1,l2,l3,graph,resolve}）</h3>
+<table>
+<tr><th>层</th><th>内容</th><th>读写路径</th></tr>
+<tr><td><b>L1</b></td><td>轨迹事件（TraceEvent）：发生过什么</td><td><code>write_memory</code> 自动落</td></tr>
+<tr><td><b>L2</b></td><td>蒸馏/整理层</td><td>后台回收（<code>schedule_memory_reclaim()</code> 在 turn finally 中触发）</td></tr>
+<tr><td><b>L3</b></td><td>近期上下文+学习者画像+作用域+偏好，拼接文本</td><td><code>read_l3_concat()</code>：仅在客户端带 <code>memory_references</code> 时预载进 context；<code>write_memory(edit)</code> 可改 <code>preferences.md</code></td></tr>
+</table>
+<h3>10.2 Prompt 体系：两套加载器并存</h3>
+<ul>
+<li><b>集中式 PromptManager</b>（<code>services/prompt/manager.py</code>）：<code>load_prompts(module, agent, language)</code>，回退链 <code>[请求语言, 基础 locale, 语言回退表, en]</code>——注释点名 <b>#712：缺翻译时落英文而非中文</b>（让模型用请求语言作答靠的是语言指令，不靠 prompt 文件本身）。进程内缓存、空结果不缓存。</li>
+<li><b>包内资源式</b>：能力自带 <code>prompts/{lang}/system.md</code> 或 yaml（importlib.resources）。工具说明独立在 <code>tools/prompting/hints/{en,zh}/&lt;tool&gt;.yaml</code>（25 个），与 schema 分离故可按语言切换。</li>
+<li><b>语言指令的精细差别</b>：<code>append_language_directive(allow_user_override=True)</code> 用于会话界面——否则模型会拒绝“请用中文回复我”并声称自己被英文 prompt 约束；研究报告/出题等无人在环的场景保持绝对式。</li>
+</ul>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+<h2><span class="no">11</span>前端架构与流式渲染 <span class="tag infra">INFRA</span></h2>
+<ul>
+<li><b>栈</b>：Next.js 16（App Router）+ React 19 + TypeScript + Tailwind，内部名 <code>opentutor-web</code>。无第三方状态库——纯 Context + useReducer。四大路由组：auth / admin / workspace（chat·books·co-writer·partners·reading·watching·whisper）/ utility（kb·courses·mastery·memory·notebooks·settings·space）。</li>
+<li><b>契约由后端拥有</b>：<code>api/contracts/export.py</code> 导出 openapi.json + turn-protocol.json → <code>scripts/generate-contracts.mjs</code> 生成 <code>web/contracts/generated/*.ts</code>，两端 CI 跑 <code>--check</code> 防漂移。改协议字段必须走这条流水线。</li>
+<li><b>传输</b>：Next 中间件 <code>proxy.ts</code> 反代 /api /ws /files 到 uvicorn（API base 真源是运行期 system.json，且<b>必须写 IPv4 字面量</b>——注释记录 localhost→::1 解析坑）；<code>TurnRuntimeClient.ts</code>(454 行) 实现退避重连、<code>lastSeq</code>+乱序重排 buffer、gap 检测后 <code>after_seq</code> 重放、command_ack 配对、open 后自动 <code>resume_from</code>。</li>
+<li><b>渲染中枢</b>：<code>features/chat/ChatStateAdapter.tsx</code>(2919 行) 单 reducer 40+ action。<b>事件是不可变事实源</b>：WS 事件 append 进 <code>MessageItem.events[]</code>，正文一律从 events <b>重算</b>（recomputeAnswerContent），不做增量字符串拼接；旁白（narration）从答案剔除但保留在 trace；中文强调标记 repair 只在换行/结束时跑。打字机效果与网络 delta 解耦：<code>useSmoothStreamText</code> 按帧从 backlog 揭示字符。</li>
+<li><b>pdfjs</b>：<code>scripts/copy-pdfjs-assets.mjs</code> 在构建前把 OpenJPEG/JBIG2/QCMS 的 wasm 拷进 public/——Next standalone tracing 不收这些文件，漏拷则 JPEG2000 编码的 PDF 渲染成<b>空白页</b>（这就是工作区里 web/public/pdfjs/wasm/* 的来历，也是技术债 §14 之一）。</li>
+<li><b>边界强制</b>：<code>.dependency-cruiser.cjs</code> CI 规则：contracts 是叶子、shared 不依赖 UI、feature 的 model/transport 不 import components。</li>
+</ul>
+</section>
+
+<!-- ============ 12 ============ -->
+<section id="s12">
+<h2><span class="no">12</span>数据持久化与配置 <span class="tag infra">INFRA</span></h2>
+<p>总原则：<b>“文档型”数据走 JSON/YAML 文件，“事件/关系型”走 SQLite，无 ORM、无统一迁移框架。</b>路径唯一真源 <code>services/path_service.py</code>（多用户 = <code>data/users/&lt;uid&gt;/</code> 再实例化同一个类）。</p>
+<table>
+<tr><th>数据</th><th>位置</th><th>说明</th></tr>
+<tr><td>会话/消息/turn 事件/notebook</td><td><code>data/user/chat_history.db</code></td><td>表：sessions, messages, turns, turn_events(UNIQUE(turn_id,seq)), notebook_*（<code>services/session/sqlite_store.py</code>, 3261 行）</td></tr>
+<tr><td>Mastery 学习会话</td><td><code>data/user/workspace/learning/mastery/mastery.sqlite3</code></td><td>7 张表含 path_leases（并发进入同一学习路径的互斥）；<code>learning/storage.py</code></td></tr>
+<tr><td>知识库</td><td><code>data/knowledge_bases/&lt;kb&gt;/</code></td><td>metadata.json + raw/ + version-1/（LlamaIndex 风格 JSON 索引）</td></tr>
+<tr><td>设置</td><td><code>data/user/settings/*.json</code>（12 个）</td><td><b>项目根 .env 被故意忽略</b>；加载即自愈（缺失默认值原子写回）；进程环境变量是显式部署覆盖，带“自回声抑制”防止 launcher 自己导出的值再被读回。</td></tr>
+<tr><td>工作区/产物</td><td><code>data/user/workspace/&lt;capability&gt;/</code>、<code>outputs/</code></td><td>按能力分目录（chat/deep_question/deep_research/deep_solve/math_animator/_detached_exec）</td></tr>
+<tr><td>运行态</td><td>cron.sqlite3 · partners/_runtime/status.sqlite3 · reading/_catalog.sqlite3</td><td>各自独立小库</td></tr>
+<tr><td>多 worker 协调</td><td>memory（单进程）或 Redis Streams + Lua（租约/fencing/命令队列）</td><td><code>runtime/coordination/</code>；integration 测试需 <code>DEEPTUTOR_TEST_REDIS_URL</code></td></tr>
+</table>
+<p><b>启动器</b>（<code>runtime/launcher.py</code>, 1573 行）：<code>deeptutor start</code> = 后端(uvicorn, 默认 8001) + 前端(打包 deeptutor_web 或源码 npm, 默认 3782) 生命周期监督；端口发现四级（连通探测→lsof/netstat 找占用者→扫描空闲→TTY 交互裁决/非 TTY 直接报错，不猜不杀）；Windows 用 CREATE_NO_WINDOW 隐藏子进程控制台（近期 fix）；就绪超时按 ARM 实测调过（#1435）。</p>
+</section>
+
+<!-- ============ 13 ============ -->
+<section id="s13">
+<h2><span class="no">13</span>打包分发与测试体系 <span class="tag infra">INFRA</span></h2>
+<ul>
+<li><b>分发三段</b>：主 wheel <code>deeptutor</code>（app+server）、CLI-only wheel <code>deeptutor-cli</code>、<code>deeptutor_web</code> 前端产物由 <code>scripts/prepare_web_package.py</code> 从 Next standalone 生成（占位符 <code>__NEXT_PUBLIC_API_BASE_PLACEHOLDER__</code> 运行期替换；git 只追踪其 <code>__init__.py</code>）。依赖真源在 pyproject extras（.[cli]/[server]/.[partners]/.[matrix]/.[math-animator]/.[all]），requirements/ 目录只是 Docker/CI 镜像。</li>
+<li><b>后端测试</b>：pytest，636 个测试文件、23 个子目录镜像包结构；三个“守门”测试：import 边界契约、REST 面快照（canonical_route_surface）、契约漂移（frontend_contract_export）+ 打包元数据/依赖镜像锁。</li>
+<li><b>前端四层</b>：node 单测(~170) → vitest+Testing-Library → Playwright 巡检(*.audit.ts) → <b>P0 浏览器回归</b>（<code>e2e/p0-regressions.audit.ts</code>：mock socket 直接注入协议帧，锁死 4 条曾真实回归的路径——regenerate 拒绝恢复/成功替换、mastery 断线重连同答案 id、连点只发一次请求）。构建后还有路由 bundle 体积预算（perf:check）与 i18n 双语硬校验。</li>
+</ul>
+</section>
+
+<!-- ============ 14 ============ -->
+<section id="s14">
+<h2><span class="no">14</span>演进方向与技术债 ★ <span class="tag risk">RISK</span></h2>
+<h3>14.1 最近在做什么（浅克隆 10 commits：8 fix + 1 feat + 1 test）</h3>
+<p>四条主线清晰：<b>① turn 生命周期正确性</b>（regeneration 原子化、命令拒绝暴露、断线重放、P0 回归网）<b>② RAG 可诊断性</b>（IMA 脱敏取证、三态检索状态、按文件路由解析引擎）<b>③ mastery 会话身份与“quiz 交付义务”</b>（draft 复用、所有结束路径必须交付题目）<b>④ Windows 桌面体验</b>（隐藏子进程控制台、启动诊断）。这是典型的“从加功能转向守可靠性”阶段。</p>
+<h3>14.2 技术债清单（按建议优先级）</h3>
+<table>
+<tr><th>#</th><th>债务</th><th>证据</th><th>对迭代的影响 / 建议</th></tr>
+<tr><td>1</td><td><b>双 WS 协议栈</b></td><td>统一 /ws v2 之外仍有 6+ 条独立 WS（knowledge/questions/book/partners/partner-groups/quiz_judge/mastery-ws）；重连逻辑双份（<code>reconnecting-websocket.ts</code> vs <code>TurnRuntimeClient.ts</code>）；前端已有 <code>no-v1-chat-surface</code> 测试说明 v1→v2 迁移未完成</td><td>最大结构债。收敛为一个带 seq/resume 的传输基类，逐条迁移</td></tr>
+<tr><td>2</td><td><b>超大文件热点</b></td><td>后端 <code>knowledge.py</code> 4231 行（KB CRUD+6 pipeline+连接器一锅烩）、<code>sqlite_store.py</code> 3261 行（会话+notebook 两领域耦合）；前端 <code>ChatStateAdapter.tsx</code> 2919、<code>ChatWorkspace.tsx</code> 2845、<code>SettingsStore.tsx</code> 2119</td><td>修改半径与冲突概率大。knowledge.py 按 pipeline 拆文件；notebook 独立 store；reducer 按 action 域拆 case</td></tr>
+<tr><td>3</td><td><b>SQLite 迁移无统一层</b></td><td>10 处独立 <code>sqlite3.connect</code>，各自 lock 文件、各自 <code>CREATE TABLE IF NOT EXISTS</code>、手写 ALTER 重建</td><td>模式演化风险高。抽共享 migrator（版本表+统一锁），复用 <code>_migration_lock</code> 模式</td></tr>
+<tr><td>4</td><td><b>前端 API 层重复</b></td><td><code>web/lib/</code> 164 个平铺文件，约 30 个 <code>*-api.ts</code> 重复同一 fetch+error+abort 模式；components↔features 双轨归属不清</td><td>契约生成物已具备，缺一个 typed client 工厂；lib/ 按领域分目录</td></tr>
+<tr><td>5</td><td><b>生成物入 git</b></td><td><code>web/public/pdfjs/wasm/*</code> 13 文件 1.6MB 被追踪，ignore 规则对其失效 → 每次升级污染 diff（当前 git status 即是）</td><td><code>git rm --cached</code> 让 predev/build 脚本产出（copy-pdfjs-assets.mjs 已具备）</td></tr>
+<tr><td>6</td><td><b>lint/type 门禁偏松</b></td><td>ruff select“intentionally relaxed”、mccabe≤10；mypy 钉 3.11 但项目支持到 3.14</td><td>与 1500+ 行的 pipeline 文件体量不匹配，建议向 architecture 测试的严格度看齐</td></tr>
+<tr><td>7</td><td><b>stages 声明与执行无校验</b></td><td>manifest.stages 是元数据，实际 <code>stream.stage()</code> 调用无一致性检查</td><td>低成本可加测试断言（每个声明 stage 至少可达）</td></tr>
+<tr><td>8</td><td><b>prompt 加载器两套并存</b></td><td>集中 PromptManager vs 能力内 importlib.resources + 各自的 <code>_PROMPT_CACHE</code>；语言归一逻辑“同一句话”抄了多处</td><td>统一收敛到 PromptManager（或 lookup.py 那一份收敛实现）</td></tr>
+</table>
+<h3>14.3 迭代时必须守住的隐含契约（易被无意破坏）</h3>
+<div class="callout warn">
+<ul style="margin:4px 0">
+<li><b>Prompt cache 字节稳定</b>：不要往 system prompt 注入分钟级时间/随机顺序内容；动态原料放 user 消息（§3.2）。</li>
+<li><b>事件即事实源</b>：前端从 events 重算答案，新增事件类型要考虑 replay 路径与 <code>UnifiedTurnClient</code> 白名单映射。</li>
+<li><b>execute() 是唯一强制点</b>：工具权限只在 ScopedToolRegistry.execute 校验，任何绕过 registry 的直调都是漏洞。</li>
+<li><b>DONE 不是最后事件</b>：session_meta 在其后；客户端以租约释放为诚实终点（§02 步 8）。</li>
+<li><b>物理路径不出工作区</b>：workspace 路径只存在于 runtime，不进模型消息/元数据/URL。</li>
+<li><b>fail-open/fail-closed 的方向</b>：管理员工具白名单读取失败=放行；用户能力探测失败=禁用。改动前想清楚属于哪类。</li>
+</ul>
+</div>
+</section>
+
+<!-- ============ 15 ============ -->
+<section id="s15">
+<h2><span class="no">15</span>术语表（附录）<span class="tag core">GLOSSARY</span></h2>
+<table>
+<tr><th>术语</th><th>注释</th></tr>
+<tr><td><b>Turn（回合）</b></td><td>一次用户提问到答案落盘的完整生命周期；租约、事件流、取消、regenerate 均以 turn 为单位。</td></tr>
+<tr><td><b>Agentic Loop</b></td><td>LLM 自主“思考→调工具→看结果→再决策”的迭代循环，本系统 8 轮探索+3 轮结算预算（§3）。</td></tr>
+<tr><td><b>Capability / TurnCapability</b></td><td>Level 2 插件：接管整轮的多阶段流水线（chat/deep_solve/…），每 turn 新实例。</td></tr>
+<tr><td><b>LoopExtension</b></td><td>挂进 chat 循环的行为扩展（注入 system 块、自有工具、finish 否决钩子），不拥有整轮。</td></tr>
+<tr><td><b>Tool / ToolRegistry</b></td><td>Level 1 插件：LLM 按需单轮调用的函数；目录式懒加载注册，OpenAI function schema 暴露。</td></tr>
+<tr><td><b>StreamBus / StreamEvent</b></td><td>进程内事件总线与 15 种事件协议；每订阅者一队列、seq 序号、支持历史重放。</td></tr>
+<tr><td><b>UnifiedContext</b></td><td>每轮唯一上下文包：用户消息+历史+工具开关+KB/记忆/persona+不可序列化 runtime 回调。</td></tr>
+<tr><td><b>Lease / Fencing Token（租约）</b></td><td>turn 执行权的分布式锁（memory 或 Redis+Lua）；防止多 worker 双跑同一 turn、支持崩溃恢复。</td></tr>
+<tr><td><b>Settlement（结算轮）</b></td><td>探索预算耗尽后的收尾阶段：注入指令令模型停止调工具、基于已有观察强制作答。</td></tr>
+<tr><td><b>Narration / Finish</b></td><td>同轮 LLM 文本的两种角色：有工具调用时是“旁白”（前端展示为过程），无工具调用时是最终答案。</td></tr>
+<tr><td><b>Progressive Disclosure（渐进披露）</b></td><td>deferred 工具不进初始 schema，只留清单，模型 load_tools 现场加载——控制上下文占用。</td></tr>
+<tr><td><b>RAG</b></td><td>Retrieval-Augmented Generation：先检索知识库证据再让 LLM 基于证据作答；本系统 6 引擎可插拔。</td></tr>
+<tr><td><b>Embedding（嵌入） / 向量库</b></td><td>把文本映射为高维向量以做语义检索；换嵌入模型会产生 embedding_mismatch 标记待重建索引。</td></tr>
+<tr><td><b>Prompt Caching</b></td><td>provider 对逐字节相同前缀按缓存计费/加速；本系统 prompt 组装顺序与日期粒度为其让路。</td></tr>
+<tr><td><b>Tool Calling / Function Calling</b></td><td>LLM 以结构化 JSON 请求调用外部函数的机制；非支持模型走标签协议+DSML 抽取降级。</td></tr>
+<tr><td><b>MCP</b></td><td>Model Context Protocol：外部工具服务器标准；MCP 工具注册进同一 ToolRegistry 并属 deferred。</td></tr>
+<tr><td><b>Knowledge Gate（达标闸门）</b></td><td>mastery 按知识点类型定通关标准：memory/procedure 看测验分（0.9），concept/design 看 Feynman 式讲述。</td></tr>
+<tr><td><b>间隔重复 / Feynman 式评估</b></td><td>基于遗忘曲线安排到期复习 / 让学习者用自己的话讲解概念以证明理解。</td></tr>
+<tr><td><b>Bwrap / Sidecar 沙箱</b></td><td>Linux bubblewrap 命名空间隔离 / 独立 runner 容器执行；Windows 降级为清理环境的受限子进程。</td></tr>
+<tr><td><b>Regenerate（重新生成）</b></td><td>turn 层语义：以原用户消息的 request_snapshot 重放新 turn，<b>新答案落盘成功后才删旧答案</b>（原子替换）。</td></tr>
+<tr><td><b>Replay / Resume（重放/续传）</b></td><td>断线后按 after_seq 从 SQLite turn_events 补发缺失事件；终态缺 done 则服务端合成。</td></tr>
+<tr><td><b>Fail-open / Fail-closed</b></td><td>出错时放行 vs 拦停。本系统：管理员白名单读取失败 fail-open；用户能力/资源探测失败 fail-closed。</td></tr>
+<tr><td><b>Partner</b></td><td>接入 IM 渠道（Discord/Telegram/Matrix 等）的常驻 AI 伙伴，有独立 WS 与回合策略。</td></tr>
+<tr><td><b>Contract Codegen（契约生成）</b></td><td>后端导出 openapi/turn-protocol JSON → 前端生成 TS 类型，两端 CI 校验漂移。</td></tr>
+</table>
+</section>
+
+</main>
+</div>
+
+<footer>
+DeepTutor 调研报告 · 基于 2026-09-19 工作区代码实测生成（关键结论均附文件路径/行号，可跳转复核）。建议配合浏览器阅读：绿色虚线词为术语，悬停可见注释。
+</footer>
+</body>
+</html>

@@ -189,7 +189,7 @@ export function TopicAtlas({
             </h2>
             <p className="relative z-[1] mx-auto mt-3 max-w-lg text-sm leading-6 opacity-70">
               {t(
-                "Tell DeepTutor what you want to learn, mix in your books, notes, and knowledge bases, and it will draft the first outline.",
+                "Tell EnjoyLearning what you want to learn, mix in your books, notes, and knowledge bases, and it will draft the first outline.",
               )}
             </p>
             <button

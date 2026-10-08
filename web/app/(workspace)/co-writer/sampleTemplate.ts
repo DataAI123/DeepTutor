@@ -1,8 +1,8 @@
 const FENCE = "```";
 
-export const CO_WRITER_SAMPLE_TEMPLATE = `# DeepTutor Co-Writer
+export const CO_WRITER_SAMPLE_TEMPLATE = `# EnjoyLearning Co-Writer
 
-> DeepTutor's built-in writing canvas for notes, reports, tutorials, and AI-assisted drafts.
+> EnjoyLearning's built-in writing canvas for notes, reports, tutorials, and AI-assisted drafts.
 
 ### Features
 
@@ -10,14 +10,14 @@ export const CO_WRITER_SAMPLE_TEMPLATE = `# DeepTutor Co-Writer
 - Real-time preview for headings, tables, code, math, flowchart, and sequence diagrams
 - AI editing workflows for rewrite, shorten, and expand
 - HTML tag decoding for tags like <sub>, <sup>, <abbr>, and <mark>
-- A practical starter draft for DeepTutor product docs and learning content
+- A practical starter draft for product docs and learning content
 
 ## Headers (Underline)
 
-DeepTutor Learning Note
+EnjoyLearning Learning Note
 =============
 
-DeepTutor Study Outline
+EnjoyLearning Study Outline
 -------------
 
 ### Characters
@@ -33,60 +33,59 @@ Superscript: X<sup>2</sup>, Subscript: O<sub>2</sub>
 
 **Abbreviation(link HTML abbr tag)**
 
-The <abbr title="Large Language Model">LLM</abbr> layer powers DeepTutor while the <abbr title="Retrieval Augmented Generation">RAG</abbr> layer provides grounded knowledge support.
+The <abbr title="Large Language Model">LLM</abbr> layer powers EnjoyLearning while the <abbr title="Retrieval Augmented Generation">RAG</abbr> layer provides grounded knowledge support.
 
 ### Blockquotes
 
-> DeepTutor helps students turn questions into structured understanding.
+> EnjoyLearning helps students turn questions into structured understanding.
 >
-> "Learn deeply, write clearly.", [DeepTutor](#deeptutor-co-writer)
+> "Learn deeply, write clearly.", [EnjoyLearning](#enjoylearning-co-writer)
 
 ### Links
 
-[DeepTutor Co-Writer](#deeptutor-co-writer "co-writer section")
+[EnjoyLearning Co-Writer](#enjoylearning-co-writer "co-writer section")
 
-[DeepTutor Learning Note](#deeptutor-learning-note)
+[EnjoyLearning Learning Note](#enjoylearning-learning-note)
 
-[DeepTutor Website](https://deeptutor.info)
+[CommonMark specification](https://commonmark.org)
 
-[Reference link][deeptutor-doc]
+[Reference link][sample-doc-anchor]
 
-[deeptutor-doc]: #deeptutor-learning-note
+[sample-doc-anchor]: #enjoylearning-learning-note
 
 ### Code Blocks
 
 #### Inline code
 
-\`deeptutor chat --once "Summarize this section"\`
+\`pip install -r requirements.txt\`
 
 #### Code Blocks (Indented style)
 
-    from deeptutor.runtime.orchestrator import ChatOrchestrator
-    orchestrator = ChatOrchestrator()
-    print("DeepTutor is ready.")
+    import json
+    config = json.loads('{"capability": "chat"}')
+    print("EnjoyLearning is ready.", config["capability"])
 
 #### Python
 
 ${FENCE}python
-from deeptutor.runtime.orchestrator import ChatOrchestrator
-from deeptutor.core.context import UnifiedContext
+import asyncio
 
 
 async def run_demo() -> str:
-    orchestrator = ChatOrchestrator()
-    context = UnifiedContext(
-        user_query="Explain Newton's second law",
-        capability="chat",
-    )
-    result = await orchestrator.run(context)
-    return result.get("response", "")
+    steps = ["read the question", "gather context", "draft the answer"]
+    for step in steps:
+        print(f"- {step}")
+    return steps[-1]
+
+
+print(asyncio.run(run_demo()))
 ${FENCE}
 
 #### JSON config
 
 ${FENCE}json
 {
-  "app_name": "DeepTutor",
+  "app_name": "EnjoyLearning",
   "default_capability": "chat",
   "enabled_tools": ["rag", "web_search", "exec", "reason"],
   "ui": {
@@ -98,23 +97,23 @@ ${FENCE}
 #### HTML code
 
 ${FENCE}html
-<section class="deeptutor-card">
-  <h1>DeepTutor</h1>
+<section class="learning-card">
+  <h1>EnjoyLearning</h1>
   <p>Write, revise, and organize learning content with AI.</p>
 </section>
 ${FENCE}
 
 ### Images
 
-![](/logo-ver2.png)
+![](/logo.png)
 
-> DeepTutor brand mark used inside the co-writer template.
+> EnjoyLearning brand mark used inside the co-writer template.
 
 ### Lists
 
-- DeepTutor Chat
-- DeepTutor Co-Writer
-- DeepTutor Research
+- EnjoyLearning Chat
+- EnjoyLearning Co-Writer
+- EnjoyLearning Research
 
 1. Draft a concept note
 2. Ask AI to refine it
@@ -136,7 +135,7 @@ Research      | Build structured multi-step reports
 
 ### Markdown extras
 
-- [x] Draft a DeepTutor product note
+- [x] Draft a product note
 - [x] Add references and structure
 - [ ] Polish the final explanation
   - [ ] Check headings
@@ -156,7 +155,7 @@ $$ \\sin(\\alpha)^{\\theta}=\\sum_{i=0}^{n}(x^i + \\cos(f))$$
 
 ${FENCE}flow
 st=>start: Student asks a question
-op=>operation: DeepTutor analyzes intent
+op=>operation: EnjoyLearning analyzes intent
 cond=>condition: Need deep workflow?
 chat=>operation: Answer with chat capability
 solve=>operation: Route to deep solve
@@ -172,11 +171,11 @@ ${FENCE}
 ### Sequence Diagram
 
 ${FENCE}seq
-Student->DeepTutor: Ask for help
-DeepTutor->KnowledgeBase: Load context
-Note right of DeepTutor: Collect memory\\nand relevant knowledge
-DeepTutor-->Student: Return guided response
-Student->>DeepTutor: Request rewrite in co-writer
+Student->EnjoyLearning: Ask for help
+EnjoyLearning->KnowledgeBase: Load context
+Note right of EnjoyLearning: Collect memory\\nand relevant knowledge
+EnjoyLearning-->Student: Return guided response
+Student->>EnjoyLearning: Request rewrite in co-writer
 ${FENCE}
 
 ### End

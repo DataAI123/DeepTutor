@@ -6,7 +6,6 @@ import {
   Check,
   CircleAlert,
   Download,
-  Github,
   RefreshCw,
   RotateCw,
   ShieldCheck,
@@ -107,7 +106,7 @@ export default function AboutSettingsPage() {
       }
       if (cancelled) return;
       if (Date.now() >= deadline) {
-        setError(t("DeepTutor did not reconnect before the update timeout."));
+        setError(t("EnjoyLearning did not reconnect before the update timeout."));
         return;
       }
       timer = setTimeout(poll, POLL_INTERVAL_MS);
@@ -208,7 +207,7 @@ export default function AboutSettingsPage() {
       <SettingsPageHeader
         title={t("About")}
         description={t(
-          "DeepTutor version, release channel, and the safest update path for this installation.",
+          "EnjoyLearning version, release channel, and the safest update path for this installation.",
         )}
       />
 
@@ -281,7 +280,7 @@ export default function AboutSettingsPage() {
         <SettingRow
           title={t("Installation")}
           description={t(
-            status?.installation.reason || "How DeepTutor is installed here.",
+            status?.installation.reason || "How EnjoyLearning is installed here.",
           )}
           control={
             <span className="text-[12.5px] text-[var(--foreground)]">
@@ -292,7 +291,7 @@ export default function AboutSettingsPage() {
         <SettingRow
           title={t("Release channel")}
           description={t(
-            "Only stable, published DeepTutor releases are considered.",
+            "Only stable, published EnjoyLearning releases are considered.",
           )}
           control={
             <span className="text-[12.5px] text-[var(--foreground)]">
@@ -305,7 +304,7 @@ export default function AboutSettingsPage() {
       <SettingSection
         title={t("Updates")}
         description={t(
-          "Version checks are cached for 24 hours. DeepTutor never installs an update without confirmation.",
+          "Version checks are cached for 24 hours. EnjoyLearning never installs an update without confirmation.",
         )}
       >
         <SettingRow
@@ -405,24 +404,9 @@ export default function AboutSettingsPage() {
         )}
       </SettingSection>
 
-      <SettingSection title={t("Project")}>
-        <ResourceRow
-          title={t("GitHub")}
-          description={t("Source code, issues, and contributions")}
-          href="https://github.com/HKUDS/DeepTutor"
-          icon={<Github className="h-4 w-4" />}
-        />
-        <ResourceRow
-          title={t("Documentation")}
-          description={t("Installation, configuration, and guides")}
-          href="https://docs.deeptutor.info"
-          icon={<ArrowUpRight className="h-4 w-4" />}
-        />
-      </SettingSection>
-
       <ConfirmDialog
         open={confirmOpen}
-        title={t("Update and restart DeepTutor?")}
+        title={t("Update and restart EnjoyLearning?")}
         confirmLabel={t("Update and restart")}
         busy={requesting}
         busyLabel={t("Preparing update…")}
@@ -430,7 +414,7 @@ export default function AboutSettingsPage() {
         onCancel={() => setConfirmOpen(false)}
       >
         {t(
-          "DeepTutor will briefly stop, install {{version}}, and reopen with the same settings. Active conversations must finish first.",
+          "EnjoyLearning will briefly stop, install {{version}}, and reopen with the same settings. Active conversations must finish first.",
           { version: latestVersion ?? "" },
         )}
       </ConfirmDialog>
@@ -443,38 +427,5 @@ function CodeValue({ value }: { value: string }) {
     <code className="rounded-md bg-[var(--accent)]/60 px-2 py-1 text-[11.5px] tabular-nums text-[var(--foreground)]">
       {value}
     </code>
-  );
-}
-
-function ResourceRow({
-  title,
-  description,
-  href,
-  icon,
-}: {
-  title: string;
-  description: string;
-  href: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer noopener"
-      className="group flex items-center justify-between gap-5 border-t border-[var(--border)]/50 py-3.5 first:border-t-0"
-    >
-      <div>
-        <div className="text-[13.5px] font-medium text-[var(--foreground)]">
-          {title}
-        </div>
-        <p className="mt-1 text-[12px] text-[var(--muted-foreground)]">
-          {description}
-        </p>
-      </div>
-      <span className="text-[var(--muted-foreground)] transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[var(--foreground)]">
-        {icon}
-      </span>
-    </a>
   );
 }

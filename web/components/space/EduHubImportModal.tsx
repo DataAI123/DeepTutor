@@ -27,8 +27,9 @@ import {
 } from "@/lib/skills-api";
 
 // Where the EduHub site lives, for "view on EduHub" links. The catalog
-// response carries the authoritative origin; this only backstops a failed load.
-const EDUHUB_FALLBACK = "https://eduhub.deeptutor.info";
+// response carries the authoritative origin; empty means the hub is not
+// published for this deployment, so the outbound links stay hidden.
+const EDUHUB_FALLBACK = "";
 
 // Lazy-load the markdown renderer so the heavier deps only ship when a user
 // opens a skill's detail view (matches the Skills viewer in SkillsSection).
@@ -188,15 +189,17 @@ export default function EduHubImportModal({
             </h3>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <a
-              href={`${webUrl}/skills`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
-            >
-              <ExternalLink size={13} />
-              {tr("在 EduHub 打开", "Open EduHub")}
-            </a>
+            {webUrl && (
+              <a
+                href={`${webUrl}/skills`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+              >
+                <ExternalLink size={13} />
+                {tr("在 EduHub 打开", "Open EduHub")}
+              </a>
+            )}
             <button
               onClick={onClose}
               aria-label={tr("关闭", "Close")}
@@ -448,6 +451,7 @@ function DetailView({
   onInstall: (slug: string, opts?: { force?: boolean }) => void;
 }) {
   const version = detail?.version || skill.version;
+  const hubUrl = detail?.webUrl || (webUrl ? `${webUrl}/skills/${skill.slug}` : "");
   return (
     <>
       <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-2.5">
@@ -459,15 +463,17 @@ function DetailView({
           {tr("返回", "Back")}
         </button>
         <div className="flex items-center gap-1.5">
-          <a
-            href={detail?.webUrl || `${webUrl}/skills/${skill.slug}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
-          >
-            <ExternalLink size={13} />
-            {tr("在 EduHub 查看", "View on EduHub")}
-          </a>
+          {hubUrl && (
+            <a
+              href={hubUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+            >
+              <ExternalLink size={13} />
+              {tr("在 EduHub 查看", "View on EduHub")}
+            </a>
+          )}
           <InstallButton
             state={installState}
             installed={installed}

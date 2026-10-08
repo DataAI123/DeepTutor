@@ -166,7 +166,7 @@ export default function MemoryUsageItem() {
         {usage.partial && (
           <span
             title={t(
-              "Only the backend and its own children. Start DeepTutor through the launcher to include the web server.",
+              "Only the backend and its own children. Start EnjoyLearning through the launcher to include the web server.",
             )}
           >
             {t("(backend only)")}

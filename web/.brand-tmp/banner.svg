@@ -1,0 +1,14 @@
+<svg width="794" height="211" viewBox="0 0 794 211" xmlns="http://www.w3.org/2000/svg">
+  <g transform="scale(0.41211)">
+    <path d="M256 128 C 224 108, 156 106, 104 130 L104 326 C 156 302, 224 304, 256 324 Z" fill="#FFFFFF"/>
+    <path d="M256 128 C 288 108, 356 106, 408 130 L408 326 C 356 302, 288 304, 256 324 Z" fill="#F1F5F9"/>
+    <path d="M172 228 Q 256 290 340 228" fill="none" stroke="#F59E0B" stroke-width="26" stroke-linecap="round"/>
+    <circle cx="196" cy="192" r="15" fill="#1E3A8A"/>
+    <circle cx="316" cy="192" r="15" fill="#1E3A8A"/>
+  </g>
+  <g transform="translate(112.5,-17.5)">
+    <text x="10" y="158" font-family="Segoe Script, Comic Sans MS, cursive" font-size="100" font-weight="700" letter-spacing="-2">
+      <tspan fill="#2563EB">Enjoy</tspan><tspan fill="#F59E0B">Learning</tspan>
+    </text>
+  </g>
+</svg>

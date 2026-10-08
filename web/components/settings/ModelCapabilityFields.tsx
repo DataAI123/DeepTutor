@@ -130,7 +130,7 @@ export function ModelCapabilityFields({
       </div>
       <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--muted-foreground)]">
         {t(
-          "Override what DeepTutor assumes about this model. Auto follows the built-in tables.",
+          "Override what EnjoyLearning assumes about this model. Auto follows the built-in tables.",
         )}
       </p>
     </div>

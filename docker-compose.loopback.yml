@@ -1,0 +1,11 @@
+# Local-only port bindings (loopback) for the Ubuntu WSL deployment.
+# Use with: docker compose -f docker-compose.yml -f docker-compose.loopback.yml up -d
+services:
+  deeptutor:
+    ports: !override
+      - "127.0.0.1:${DEEPTUTOR_DOCKER_BACKEND_PORT:-8001}:${DEEPTUTOR_DOCKER_BACKEND_PORT:-8001}"
+      - "127.0.0.1:${DEEPTUTOR_DOCKER_FRONTEND_PORT:-3782}:${DEEPTUTOR_DOCKER_FRONTEND_PORT:-3782}"
+
+  pocketbase:
+    ports: !override
+      - "127.0.0.1:${DEEPTUTOR_DOCKER_POCKETBASE_PORT:-8090}:8090"

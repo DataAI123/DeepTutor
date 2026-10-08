@@ -72,7 +72,7 @@ function CoursesLoadFailureNotice({
           "This account cannot open the course library. Sign in again or switch accounts, then retry.",
         )
       : t(
-          "The server could not be reached. Check that DeepTutor is running, then retry.",
+          "The server could not be reached. Check that EnjoyLearning is running, then retry.",
         ));
 
   const copyRequestId = async () => {
@@ -344,7 +344,7 @@ export default function CoursesShelf() {
                 ? t(
                     "Start with a subject such as Operating Systems or Network Security.",
                   )
-                : t("Attach its textbook, then let DeepTutor plan from there.")}
+                : t("Attach its textbook, then let EnjoyLearning plan from there.")}
             </span>
           </button>
         </div>

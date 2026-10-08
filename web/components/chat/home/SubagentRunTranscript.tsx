@@ -106,7 +106,7 @@ function SubagentLine({ channel, text }: { channel: string; text: string }) {
       return (
         <div className="mt-1 border-t border-[var(--border)]/60 pt-2.5 first:mt-0 first:border-t-0 first:pt-0">
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--primary)]">
-            {channel === "user_question" ? t("You ask") : t("DeepTutor asks")}
+            {channel === "user_question" ? t("You ask") : t("EnjoyLearning asks")}
           </div>
           <div className="whitespace-pre-wrap break-words leading-[1.6] text-[var(--foreground)]">
             {text}

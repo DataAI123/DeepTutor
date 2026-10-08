@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepTutor 系统架构详解</title>
+<style>
+  :root {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --bg-card: #1e293b;
+    --border: #475569;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #38bdf8;
+    --accent-dim: #0ea5e9;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --error: #f87171;
+    --purple: #a78bfa;
+    --pink: #f472b6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* ===== Header ===== */
+  .hero {
+    position: relative;
+    padding: 80px 40px 60px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 20% 50%, rgba(56, 189, 248, 0.15), transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(167, 139, 250, 0.1), transparent 50%);
+    pointer-events: none;
+  }
+  .hero-content { position: relative; max-width: 1200px; margin: 0 auto; }
+  .hero h1 {
+    font-size: 3.2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 16px;
+    letter-spacing: -0.02em;
+  }
+  .hero .subtitle {
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    max-width: 700px;
+  }
+  .hero-meta {
+    margin-top: 32px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .hero-meta .pill {
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: var(--accent);
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+
+  /* ===== Navigation ===== */
+  .toc {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 40px;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .toc a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .toc a:hover { color: var(--accent); background: rgba(56, 189, 248, 0.1); }
+
+  /* ===== Layout ===== */
+  .container { max-width: 1200px; margin: 0 auto; padding: 40px; }
+
+  section { margin-bottom: 80px; }
+
+  h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  h2 .num {
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 1.6rem;
+  }
+
+  h3 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 32px 0 16px;
+  }
+
+  h4 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 24px 0 12px;
+  }
+
+  p, li { color: var(--text-secondary); }
+  ul, ol { padding-left: 24px; margin: 12px 0; }
+  li { margin: 6px 0; }
+
+  /* ===== Cards ===== */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin: 16px 0;
+  }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+  }
+
+  .feature-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: all 0.3s;
+  }
+  .feature-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(56, 189, 248, 0.15);
+  }
+  .feature-card .icon {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem; margin-bottom: 14px;
+  }
+  .feature-card h4 { margin: 0 0 8px; }
+  .feature-card p { font-size: 0.9rem; margin: 0; }
+
+  /* ===== Architecture Diagram ===== */
+  .arch-diagram {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    margin: 32px 0;
+    overflow-x: auto;
+  }
+
+  .arch-layer {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .arch-node {
+    flex: 1;
+    text-align: center;
+    padding: 14px 10px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.82rem;
+    border: 1px solid;
+    min-width: 100px;
+    transition: all 0.2s;
+    cursor: default;
+  }
+  .arch-node:hover { transform: scale(1.02); }
+
+  .layer-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .entry .arch-node {
+    background: linear-gradient(135deg, #1e40af, #1e3a8a);
+    border-color: #3b82f6;
+    color: #dbeafe;
+  }
+  .entry .layer-label {
+    background: #1e3a8a;
+    color: #93c5fd;
+    border: 1px solid #3b82f6;
+  }
+
+  .orchestrator .arch-node {
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    border-color: #a78bfa;
+    color: #ede9fe;
+  }
+  .orchestrator .layer-label {
+    background: #6d28d9;
+    color: #c4b5fd;
+    border: 1px solid #a78bfa;
+  }
+
+  .capability .arch-node {
+    background: linear-gradient(135deg, #0369a1, #075985);
+    border-color: #38bdf8;
+    color: #e0f2fe;
+  }
+  .capability .layer-label {
+    background: #075985;
+    color: #7dd3fc;
+    border: 1px solid #38bdf8;
+  }
+
+  .agentic .arch-node {
+    background: linear-gradient(135deg, #be185d, #9d174d);
+    border-color: #f472b6;
+    color: #fce7f3;
+  }
+  .agentic .layer-label {
+    background: #9d174d;
+    color: #f9a8d4;
+    border: 1px solid #f472b6;
+  }
+
+  .tool .arch-node {
+    background: linear-gradient(135deg, #15803d, #166534);
+    border-color: #4ade80;
+    color: #dcfce7;
+  }
+  .tool .layer-label {
+    background: #166534;
+    color: #86efac;
+    border: 1px solid #4ade80;
+  }
+
+  .service .arch-node {
+    background: linear-gradient(135deg, #92400e, #78350f);
+    border-color: #fbbf24;
+    color: #fef3c7;
+  }
+  .service .layer-label {
+    background: #78350f;
+    color: #fcd34d;
+    border: 1px solid #fbbf24;
+  }
+
+  /* Arrow connectors */
+  .connector {
+    text-align: center;
+    margin: 4px 0;
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    letter-spacing: 16px;
+  }
+
+  /* ===== Tool Table ===== */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+  }
+  th {
+    text-align: left;
+    background: var(--bg-tertiary);
+    padding: 12px 16px;
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-bottom: 2px solid var(--border);
+  }
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+  }
+  tr:hover td { background: rgba(255, 255, 255, 0.02); }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .badge-auto { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+  .badge-user { background: rgba(56, 189, 248, 0.15); color: var(--accent); }
+  .badge-cap { background: rgba(167, 139, 250, 0.15); color: var(--purple); }
+
+  /* ===== Code ===== */
+  pre {
+    background: #0a0f1c;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    overflow-x: auto;
+    margin: 16px 0;
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+  code {
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    color: #e2e8f0;
+  }
+  .code-keyword { color: #c084fc; }
+  .code-str { color: #86efac; }
+  .code-func { color: #60a5fa; }
+  .code-comment { color: #64748b; font-style: italic; }
+
+  /* ===== Flow Diagram ===== */
+  .flow-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    margin: 24px 0;
+  }
+  .flow-node {
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 24px;
+    text-align: center;
+    min-width: 280px;
+    transition: all 0.3s;
+  }
+  .flow-node:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px rgba(56, 189, 248, 0.2);
+  }
+  .flow-node .title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .flow-node .desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .flow-arrow {
+    color: var(--accent);
+    font-size: 1.4rem;
+    margin: 2px 0;
+  }
+
+  /* ===== RAG Providers ===== */
+  .rag-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .rag-provider {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+  .rag-provider .name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+  .rag-provider .desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .rag-provider .tag {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 3px 10px;
+    background: rgba(56, 189, 248, 0.1);
+    color: var(--accent);
+    border-radius: 4px;
+    font-size: 0.7rem;
+  }
+
+  /* ===== Key Files Section ===== */
+  .file-tree {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    line-height: 1.8;
+    margin: 16px 0;
+  }
+  .file-tree .dir { color: var(--accent); font-weight: 600; }
+  .file-tree .file { color: var(--text-secondary); }
+  .file-tree .highlight { color: var(--warning); }
+  .file-tree .comment { color: var(--text-muted); }
+
+  /* ===== Event Types ===== */
+  .event-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+    margin: 16px 0;
+  }
+  .event-chip {
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent);
+    text-align: center;
+  }
+
+  /* ===== Tech Stack ===== */
+  .tech-stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 16px 0;
+  }
+  .tech-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+  }
+  .tech-item b { color: var(--text-primary); }
+
+  /* ===== Stats Bar ===== */
+  .stats-bar {
+    display: flex;
+    gap: 20px;
+    margin: 24px 0;
+    flex-wrap: wrap;
+  }
+  .stat-box {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(167, 139, 250, 0.1));
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    border-radius: 12px;
+    padding: 20px;
+    flex: 1;
+    min-width: 160px;
+    text-align: center;
+  }
+  .stat-box .num {
+    font-size: 2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .stat-box .label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* ===== Label Protocol ===== */
+  .label-row {
+    display: flex;
+    gap: 12px;
+    margin: 8px 0;
+    align-items: center;
+  }
+  .label-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    min-width: 110px;
+    text-align: center;
+  }
+  .FINISH { background: rgba(74, 222, 128, 0.15); color: var(--success); border: 1px solid rgba(74, 222, 128, 0.3); }
+  .THINK { background: rgba(167, 139, 250, 0.15); color: var(--purple); border: 1px solid rgba(167, 139, 250, 0.3); }
+  .TOOLS { background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3); }
+  .PAUSE { background: rgba(251, 191, 36, 0.15); color: var(--warning); border: 1px solid rgba(251, 191, 36, 0.3); }
+
+  /* ===== Footer ===== */
+  footer {
+    text-align: center;
+    padding: 40px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  @media (max-width: 768px) {
+    .hero { padding: 40px 20px; }
+    .hero h1 { font-size: 2rem; }
+    .container { padding: 20px; }
+    .toc { padding: 12px 20px; }
+    .arch-diagram { padding: 16px; }
+    .arch-layer { flex-wrap: wrap; }
+    .layer-label { writing-mode: horizontal-tb; width: 100%; }
+    .arch-node { min-width: calc(50% - 4px); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== Hero ===== -->
+<div class="hero">
+  <div class="hero-content">
+    <h1>DeepTutor 系统架构详解</h1>
+    <p class="subtitle">一个 Agent-Native 的智能学习伴侣，采用两层插件模型将 LLM 能力暴露为可组合的 Tools 与 Capabilities，通过统一的 StreamBus 事件通道驱动流式响应。</p>
+    <div class="hero-meta">
+      <span class="pill">Python 3.11+</span>
+      <span class="pill">Next.js + TypeScript</span>
+      <span class="pill">Async Event-Driven</span>
+      <span class="pill">Multi-LLM Provider</span>
+      <span class="pill">Multi-Provider RAG</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Navigation ===== -->
+<nav class="toc">
+  <a href="#overview">① 架构总览</a>
+  <a href="#layers">② 双层插件模型</a>
+  <a href="#context">③ 核心数据结构</a>
+  <a href="#agentic">④ Agentic Loop 机制</a>
+  <a href="#streambus">⑤ 流事件系统</a>
+  <a href="#tools">⑥ Level 1 — Tools</a>
+  <a href="#capabilities">⑦ Level 2 — Capabilities</a>
+  <a href="#rag">⑧ RAG 多提供者架构</a>
+  <a href="#flow">⑨ 请求处理流程</a>
+  <a href="#files">⑩ 关键文件导航</a>
+  <a href="#stack">⑪ 技术栈</a>
+</nav>
+
+<div class="container">
+
+<!-- ===== ① 架构总览 ===== -->
+<section id="overview">
+  <h2><span class="num">①</span> 架构总览</h2>
+
+  <div class="stats-bar">
+    <div class="stat-box"><div class="num">2</div><div class="label">核心插件层级</div></div>
+    <div class="stat-box"><div class="num">3</div><div class="label">入口形式 (CLI / WS / SDK)</div></div>
+    <div class="stat-box"><div class="num">6+</div><div class="label">RAG 提供者</div></div>
+    <div class="stat-box"><div class="num">15+</div><div class="label">Built-in Tools</div></div>
+    <div class="stat-box"><div class="num">12+</div><div class="label">Capabilities</div></div>
+  </div>
+
+  <p>DeepTutor 的核心设计思想是 <strong>"Agent-Native"</strong>：将 LLM 的原生能力拆解为两层可组合的模块。Level 1 Tools 是 LLM 按需调用的原子函数；Level 2 Capabilities 则拥有完整的 turn 控制权，内部可能经历多轮迭代。所有模块通过统一的 <code>StreamBus</code> 事件通道与三种入口（CLI、WebSocket、Python SDK）解耦。</p>
+
+  <div class="arch-diagram">
+    <h4 style="color: var(--text-muted); margin-bottom: 16px;">分层架构图</h4>
+
+    <div class="arch-layer entry">
+      <div class="layer-label">ENTRY</div>
+      <div class="arch-node">CLI (Typer)</div>
+      <div class="arch-node">WebSocket API</div>
+      <div class="arch-node">Python SDK</div>
+    </div>
+    <div class="connector">▼</div>
+
+    <div class="arch-layer orchestrator">
+      <div class="layer-label">ORCHESTRATOR</div>
+      <div class="arch-node" style="flex: 3;">ChatOrchestrator — 路由 UnifiedContext 到 Capability</div>
+    </div>
+    <div class="connector">▼</div>
+
+    <div class="arch-layer capability">
+      <div class="layer-label">LEVEL 2 CAP</div>
+      <div class="arch-node">chat</div>
+      <div class="arch-node">solve</div>
+      <div class="arch-node">mastery</div>
+      <div class="arch-node">research</div>
+      <div class="arch-node">visualize</div>
+      <div class="arch-node">reading</div>
+      <div class="arch-node">setup</div>
+    </div>
+    <div class="connector">▼</div>
+
+    <div class="arch-layer agentic">
+      <div class="layer-label">AGENTIC LOOP</div>
+      <div class="arch-node" style="flex: 3;">Label-Driven Iteration — run_agentic_loop() 轮询直到终止标签</div>
+    </div>
+    <div class="connector">▼</div>
+
+    <div class="arch-layer tool">
+      <div class="layer-label">LEVEL 1 TOOLS</div>
+      <div class="arch-node">rag</div>
+      <div class="arch-node">web_search</div>
+      <div class="arch-node">brainstorm</div>
+      <div class="arch-node">reason</div>
+      <div class="arch-node">exec</div>
+      <div class="arch-node">ask_user</div>
+      <div class="arch-node">github</div>
+      <div class="arch-node">memory</div>
+    </div>
+    <div class="connector">▼</div>
+
+    <div class="arch-layer service">
+      <div class="layer-label">SERVICES</div>
+      <div class="arch-node" style="flex: 2;">LLM Provider Factory</div>
+      <div class="arch-node" style="flex: 2;">RAG Pipelines</div>
+      <div class="arch-node" style="flex: 1;">MCP Servers</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== ② 双层插件模型 ===== -->
+<section id="layers">
+  <h2><span class="num">②</span> 双层插件模型</h2>
+
+  <div class="card-grid">
+    <div class="feature-card" style="border-color: rgba(74, 222, 128, 0.4);">
+      <div class="icon" style="background: rgba(74, 222, 128, 0.15);">🔧</div>
+      <h4>Level 1 — Tools</h4>
+      <p>单次函数调用，LLM 按需选择。每个 Tool 实现 BaseTool 接口，提供 JSON Schema 元数据和 execute() 方法。系统支持用户切换启用、自动挂载（基于上下文条件）、以及 deferred 渐进式加载。</p>
+      <p style="color: var(--success); margin-top: 10px; font-size: 0.85rem;">→ "我需要搜索 web" → 调用 web_search()</p>
+    </div>
+
+    <div class="feature-card" style="border-color: rgba(167, 139, 250, 0.4);">
+      <div class="icon" style="background: rgba(167, 139, 250, 0.15);">🎭</div>
+      <h4>Level 2 — Capabilities</h4>
+      <p>拥有 turn 控制权的多阶段流水线。内部驱动完整的 agentic loop，可注册自己的 Tools（owned_tools），通过 LoopExtension Protocol 与系统集成。KnowledgeCapability 模式独占工具面。</p>
+      <p style="color: var(--purple); margin-top: 10px; font-size: 0.85rem;">→ "深度解题" → deep_solve (planning→reasoning→writing)</p>
+    </div>
+  </div>
+
+  <h3>关键设计差异</h3>
+  <table>
+    <thead>
+      <tr><th>维度</th><th>Level 1 Tool</th><th>Level 2 Capability</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>执行方式</td><td>单次 async execute()</td><td>驱动完整 agentic loop</td></tr>
+      <tr><td>控制权</td><td>LLM 在 loop 内按需调用</td><td>接管整个 turn 的生命周期</td></tr>
+      <tr><td>工具面</td><td>被 LLM 选择使用</td><td>可注册 own_tools，或独占 (KnowledgeCapability)</td></tr>
+      <tr><td>System Prompt</td><td>出现在工具列表</td><td>通过 system_block() 贡献 prompt 片段</td></tr>
+      <tr><td>终止</td><td>返回 ToolResult 即可</td><td>Loop 直到 terminal label 或 max_iterations</td></tr>
+      <tr><td>交互</td><td>可 pause_for_user 但控制权返回 loop</td><td>完整的 on_user_pause / on_user_resume 生命周期钩子</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===== ③ 核心数据结构 ===== -->
+<section id="context">
+  <h2><span class="num">③</span> 核心数据结构</h2>
+
+  <h3>UnifiedContext — 统一上下文</h3>
+  <p>贯穿整个系统的单一数据对象，从 Orchestrator 流入每个 Tool / Capability / Plugin。所有入口都填充同一个 <code>UnifiedContext</code>，保证语义一致性。</p>
+
+  <pre><code><span class="code-keyword">@dataclass</span>
+<span class="code-keyword">class</span> <span class="code-func">UnifiedContext</span>:
+    session_id: str           <span class="code-comment"># 持久会话标识</span>
+    user_message: str          <span class="code-comment"># 当前用户输入</span>
+    conversation_history: list <span class="code-comment"># OpenAI 格式历史</span>
+    enabled_tools: list | None <span class="code-comment"># 用户显式启用的 L1 tools</span>
+    active_capability: str | None <span class="code-comment"># 选中的 L2 Capability</span>
+    knowledge_bases: list      <span class="code-comment"># RAG 使用的 KB 名</span>
+    attachments: list          <span class="code-comment"># 图片 / 文件</span>
+    config_overrides: dict     <span class="code-comment"># 本次请求的临时配置</span>
+    memory_context: str        <span class="code-comment"># 注入 system prompt 的记忆文本</span>
+    persona_context: str       <span class="code-comment"># 人设指令</span>
+    skills_manifest: str       <span class="code-comment"># Skills 清单</span>
+    runtime: TurnRuntimeContext <span class="code-comment"># 运行时回调（不可序列化）</span>
+    interaction: InteractionState <span class="code-comment"># 可变交互状态</span>
+    capability_output: CapabilityOutput <span class="code-comment"># Capability 结构化输出</span>
+    extension_state: dict      <span class="code-comment"># 各 Extension 独立命名空间</span></code></pre>
+
+  <h3>ToolDefinition — 工具元数据</h3>
+  <p>描述 Tool 的 JSON Schema，用于构造 LLM 的 function-calling schema。支持两种模式：<code>parameters</code> 列表（标准化）和 <code>raw_parameters</code>（直接透传 JSON Schema，用于 MCP 等外部适配）。</p>
+
+  <h3>ToolResult — 工具返回</h3>
+  <pre><code><span class="code-keyword">@dataclass</span>
+<span class="code-keyword">class</span> <span class="code-func">ToolResult</span>:
+    content: str               <span class="code-comment"># 返回给 LLM 的文本</span>
+    sources: list[dict]        <span class="code-comment"># 引用来源（流事件）</span>
+    metadata: dict             <span class="code-comment"># 自由结构 payload</span>
+    success: bool              <span class="code-comment"># 显式失败标志</span>
+    pause_for_user: dict | None <span class="code-comment"># 暂停等待用户回复</span>
+    terminate_turn: bool       <span class="code-comment"># 终止 turn（保留兼容）</span></code></pre>
+</section>
+
+<!-- ===== ④ Agentic Loop ===== -->
+<section id="agentic">
+  <h2><span class="num">④</span> Agentic Loop 机制</h2>
+
+  <p>DeepTutor 的核心执行引擎是一个 <strong>标签驱动的迭代调度器</strong> (<code>run_agentic_loop()</code>)。它不依赖单一固定的 prompt 结构，而是让每个 Capability 声明自己的标签词汇 (<code>LabelProtocol</code>)，LLM 每轮以一行标签开头。</p>
+
+  <h3>LabelProtocol — 标签协议</h3>
+  <p>每个 Capability 声明 5 种标签分类：</p>
+
+  <div class="card">
+    <div class="label-row"><span class="label-name FINISH">FINISH</span><span>终止标签 — 结束 loop 并产出最终响应文本</span></div>
+    <div class="label-row"><span class="label-name THINK">THINK</span><span>中间标签 — 推理过程，文本保留为 assistant context</span></div>
+    <div class="label-row"><span class="label-name TOOLS">TOOLS</span><span>工具标签 — 本轮包含 tool_calls，执行后继续 loop</span></div>
+    <div class="label-row"><span class="label-name PAUSE">PAUSE</span><span>终态+可流式 — 向用户输出旁白但不结束 turn</span></div>
+  </div>
+
+  <h3>LoopHost — Capability 回调接口</h3>
+  <p>Loop 核心保持通用，所有特定行为通过 <code>LoopHost</code> Protocol 回调：</p>
+  <pre><code class="code-comment"># 关键钩子</code>
+<span class="code-func">guard_context_window</span>()        <span class="code-comment"># 裁剪消息窗口</span>
+<span class="code-func">dispatch_tools</span>()                <span class="code-comment"># 并行执行 tool_calls</span>
+<span class="code-func">resolve_pause</span>()                <span class="code-comment"># 处理 pause_for_user</span>
+<span class="code-func">emit_final</span>()                     <span class="code-comment"># 流式最终文本</span>
+<span class="code-func">emit_terminator</span>()               <span class="code-comment"># Tool 终止时的最终事件</span>
+<span class="code-func">force_finalize</span>()                <span class="code-comment"># max_iterations 耗尽时的恢复策略</span>
+<span class="code-func">validate_terminal</span>()             <span class="code-comment"># 有状态的终端标签校验</span></code></pre>
+
+  <h3>协议违规修复</h3>
+  <p>Loop 检测三类违规并自动修复重试：</p>
+  <ul>
+    <li><code>missing_label</code> — 首行无有效标签</li>
+    <li><code>multiple_labels</code> — 文本内嵌入多个标签</li>
+    <li><code>{label}_with_tools</code> — 非 TOOLS 标签却携带 tool_calls</li>
+    <li><code>tool_without_calls</code> — TOOLS 标签却无实际调用</li>
+  </ul>
+  <p>修复流程：保留模型草稿 → 注入 correction prompt → 继续下一轮迭代。</p>
+</section>
+
+<!-- ===== ⑤ 流事件系统 ===== -->
+<section id="streambus">
+  <h2><span class="num">⑤</span> 流事件系统 (StreamBus)</h2>
+
+  <p>所有 Capability 和 Tool 都通过 <code>StreamBus</code> 发布事件，消费者（CLI 渲染器、WebSocket 推送、JSON 写入器）订阅同一个通道。这是生产者-消费者解耦的关键。</p>
+
+  <h3>事件类型 (StreamEventType)</h3>
+  <div class="event-grid">
+    <div class="event-chip">STAGE_START</div>
+    <div class="event-chip">STAGE_END</div>
+    <div class="event-chip">THINKING</div>
+    <div class="event-chip">OBSERVATION</div>
+    <div class="event-chip">CONTENT</div>
+    <div class="event-chip">TOOL_CALL</div>
+    <div class="event-chip">TOOL_RESULT</div>
+    <div class="event-chip">PROGRESS</div>
+    <div class="event-chip">SOURCES</div>
+    <div class="event-chip">RESULT</div>
+    <div class="event-chip">ERROR</div>
+    <div class="event-chip">DONE</div>
+    <div class="event-chip">WAIT_FOR_INPUT</div>
+  </div>
+
+  <h3>StreamBus 核心机制</h3>
+  <div class="flow-container">
+    <div class="flow-node">
+      <div class="title">emit(StreamEvent)</div>
+      <div class="desc">生产者推送事件到所有订阅者队列</div>
+    </div>
+    <div class="flow-arrow">│</div>
+    <div class="flow-node">
+      <div class="title">subscribe(after_seq=N)</div>
+      <div class="desc">异步迭代器 — 支持从历史回放 + 实时推送</div>
+    </div>
+    <div class="flow-arrow">│</div>
+    <div class="flow-node">
+      <div class="title">多消费者 fan-out</div>
+      <div class="desc">每个订阅者独立 asyncio.Queue，跨 loop 安全</div>
+    </div>
+  </div>
+
+  <h3>关键实现亮点</h3>
+  <ul>
+    <li><strong>跨事件循环安全</strong>：为每个订阅者记录其所属 event loop，跨 loop 用 <code>call_soon_threadsafe</code> 投递</li>
+    <li><strong>历史回放</strong>：新订阅者自动回放 <code>_history</code> 中已发出的事件，支持断线重连</li>
+    <li><strong>seq 序列号</strong>：可选分配单调递增序号，客户端可通过 <code>after_seq</code> 增量订阅</li>
+    <li><strong>阶段上下文</strong>：<code>stream.stage(name)</code> 作为 context manager 自动发射 STAGE_START / STAGE_END</li>
+    <li><strong>WAIT_FOR_INPUT</strong>：完整的暂停-回复机制，通过 <code>stream.wait_for_input(prompt)</code> 暂停并注册 input_listener</li>
+  </ul>
+</section>
+
+<!-- ===== ⑥ Level 1 Tools ===== -->
+<section id="tools">
+  <h2><span class="num">⑥</span> Level 1 — Tools</h2>
+
+  <h3>工具分类与挂载策略</h3>
+  <table>
+    <thead>
+      <tr><th>工具</th><th>挂载方式</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>brainstorm</td><td><span class="badge badge-user">用户切换</span></td><td>广度优先的想法探索</td></tr>
+      <tr><td>web_search</td><td><span class="badge badge-user">用户切换</span></td><td>Web 搜索 + 引用</td></tr>
+      <tr><td>paper_search</td><td><span class="badge badge-user">用户切换</span></td><td>arXiv 预印本搜索</td></tr>
+      <tr><td>reason</td><td><span class="badge badge-user">用户切换</span></td><td>专用深度推理 LLM 调用</td></tr>
+      <tr><td>rag</td><td><span class="badge badge-auto">自动挂载</span></td><td>有 KB 时自动出现</td></tr>
+      <tr><td>read_source</td><td><span class="badge badge-auto">自动挂载</span></td><td>有附件/来源时</td></tr>
+      <tr><td>read_memory / write_memory</td><td><span class="badge badge-auto">自动挂载</span></td><td>记忆系统启用时</td></tr>
+      <tr><td>exec</td><td><span class="badge badge-auto">自动挂载</span></td><td>Sandbox 可用时（Python/C/C++/Shell）</td></tr>
+      <tr><td>cron</td><td><span class="badge badge-auto">自动挂载</span></td><td>定时任务调度</td></tr>
+      <tr><td>ask_user</td><td><span class="badge badge-auto">自动挂载</span></td><td>暂停 turn 等待用户回复</td></tr>
+      <tr><td>github</td><td><span class="badge badge-auto">自动挂载</span></td><td>GitHub API 查询</td></tr>
+      <tr><td>web_fetch</td><td><span class="badge badge-auto">自动挂载</span></td><td>URL 内容抓取</td></tr>
+      <tr><td>load_tools</td><td><span class="badge badge-auto">自动挂载</span></td><td>按需加载 deferred tools (MCP)</td></tr>
+      <tr><td>read_skill</td><td><span class="badge badge-auto">自动挂载</span></td><td>按需读取 Skills 全文</td></tr>
+      <tr><td>write_note</td><td><span class="badge badge-auto">自动挂载</span></td><td>写入 Notebook</td></tr>
+      <tr><td>mastery_nav / mastery_tool</td><td><span class="badge badge-cap">Capability 挂载</span></td><td>Guided Learning 专属</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Deferred Tools — 渐进式加载</h3>
+  <p>标记为 <code>deferred=True</code> 的 Tool（主要是 MCP 外部工具）不会出现在初始工具列表中。System Prompt 只列出一行入口；LLM 可通过 <code>load_tools</code> 主动拉取完整 schema，实现大规模外部工具的按需暴露。</p>
+
+  <h3>外部工具来源</h3>
+  <ul>
+    <li><strong>MCP Servers</strong> — 通过 Model Context Protocol 连接的外部服务（CLI apps、远程 API 等）</li>
+    <li><strong>CLI Apps</strong> — 注册的命令行应用，适配为 tool</li>
+    <li><strong>Plugin Contributions</strong> — 插件系统贡献的自定义 Tools</li>
+  </ul>
+</section>
+
+<!-- ===== ⑦ Level 2 Capabilities ===== -->
+<section id="capabilities">
+  <h2><span class="num">⑦</span> Level 2 — Capabilities</h2>
+
+  <div class="card-grid">
+    <div class="feature-card">
+      <div class="icon" style="background: rgba(56, 189, 248, 0.15);">💬</div>
+      <h4>chat</h4>
+      <p>默认能力。exploring → responding 的单 agentic loop，复用所有内置 tool。</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon" style="background: rgba(74, 222, 128, 0.15);">🧮</div>
+      <h4>solve</h4>
+      <p>多阶段解题：planning → reasoning → writing。拥有专属 tools 组。</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon" style="background: rgba(167, 139, 250, 0.15);">🎯</div>
+      <h4>mastery</h4>
+      <p>Guided Learning 掌握路径。基于掌握度模型动态生成学习序列。</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon" style="background: rgba(251, 191, 36, 0.15);">🔬</div>
+      <h4>research</h4>
+      <p>深度研究：rephrasing → decomposing → researching → reporting。</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon" style="background: rgba(244, 114, 182, 0.15);">📊</div>
+      <h4>visualize</h4>
+      <p>可视化生成：SVG / Chart.js / Mermaid / HTML，可路由到 Manim。</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon" style="background: rgba(56, 189, 248, 0.15);">📖</div>
+      <h4>reading</h4>
+      <p>阅读能力：文本提取、知识检测、quiz 生成、翻译、词汇卡片。</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon" style="background: rgba(74, 222, 128, 0.15);">🎬</div>
+      <h4>watching</h4>
+      <p>视频学习：转录生成、关键帧提取、学习笔记。</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon" style="background: rgba(167, 139, 250, 0.15);">🤖</div>
+      <h4>subagent</h4>
+      <p>子 Agent 协作编排。</p>
+    </div>
+  </div>
+
+  <h3>LoopExtension Protocol — 扩展点</h3>
+  <p>Capability 通过实现 <code>LoopExtension</code> Protocol 融入 chat loop：</p>
+  <pre><code><span class="code-keyword">class</span> <span class="code-func">LoopExtension</span>(Protocol):
+    name: str                              <span class="code-comment"># 能力名</span>
+    owned_tools: tuple[str, ...]          <span class="code-comment"># 专属 tools</span>
+
+    <span class="code-keyword">def</span> <span class="code-func">is_active</span>(context) -> bool:
+        <span class="code-comment"># 是否在当前 turn 激活</span>
+
+    <span class="code-keyword">def</span> <span class="code-func">system_block</span>(context, *, language, prompts) -> PromptBlock | None:
+        <span class="code-comment"># 贡献 system prompt 片段</span>
+
+    <span class="code-keyword">def</span> <span class="code-func">augment_kwargs</span>(tool_name, kwargs, context) -> dict:
+        <span class="code-comment"># 注入服务器私有 kwargs</span>
+
+    <span class="code-keyword">def</span> <span class="code-func">pre_loop</span>(context, stream, *, usage=None) -> PromptBlock | None:
+        <span class="code-comment"># 可选：第一次 LLM 调用前的预传递</span></code></pre>
+
+  <h3>KnowledgeCapability — 知识独占模式</h3>
+  <p>与普通 LoopExtension 不同，KnowledgeCapability（如 IMA、Obsidian、MarginNote4）<strong>独占整个工具面</strong>：当激活时，完全替换 chat 的 tool surface 为自己的 owned_tools，模型通过这些专属工具直接推理知识库，而非固定流水线。</p>
+</section>
+
+<!-- ===== ⑧ RAG 多提供者架构 ===== -->
+<section id="rag">
+  <h2><span class="num">⑧</span> RAG 多提供者架构</h2>
+
+  <p>DeepTutor 设计了 Provider-Agnostic 的 RAG 层，支持多种索引后端无缝切换。每个 provider 实现统一的 Pipeline 接口。</p>
+
+  <div class="rag-grid">
+    <div class="rag-provider">
+      <div class="name">LlamaIndex</div>
+      <div class="desc">本地向量索引 + 可选 Rerank</div>
+      <span class="tag">Local</span>
+    </div>
+    <div class="rag-provider">
+      <div class="name">IMA</div>
+      <div class="desc">火山引擎智能体知识问答</div>
+      <span class="tag">Remote API</span>
+    </div>
+    <div class="rag-provider">
+      <div class="name">GraphRAG</div>
+      <div class="desc">基于知识图谱的全局检索</div>
+      <span class="tag">Graph + Vector</span>
+    </div>
+    <div class="rag-provider">
+      <div class="name">LightRAG</div>
+      <div class="desc">轻量级本地图索引</div>
+      <span class="tag">Local</span>
+    </div>
+    <div class="rag-provider">
+      <div class="name">PageIndex</div>
+      <div class="desc">OCR + 页面级索引</div>
+      <span class="tag">Document</span>
+    </div>
+    <div class="rag-provider">
+      <div class="name">WeKnorA</div>
+      <div class="desc">外部知识图谱 API</div>
+      <span class="tag">Remote</span>
+    </div>
+  </div>
+
+  <h3>RAG Pipeline 抽象</h3>
+  <pre><code><span class="code-keyword">class</span> <span class="code-func">BasePipeline</span>:
+    <span class="code-comment"># 每个 provider 必须实现：</span>
+    <span class="code-keyword">async def</span> <span class="code-func">retrieve</span>(query: str, top_k: int, **kwargs) -> RetrievalResult
+    <span class="code-keyword">async def</span> <span class="code-func">ingest</span>(documents: list[Document], **kwargs) -> IngestResult
+    <span class="code-keyword">async def</span> <span class="code-func">health_check</span>() -> HealthStatus
+    <span class="code-keyword">async def</span> <span class="code-func">diagnose</span>(query: str) -> DiagnoseResult
+
+<span class="code-comment"># RAG Service 统一编排：</span>
+<span class="code-keyword">class</span> <span class="code-func">RAGService</span>:
+    factory: PipelineFactory       <span class="code-comment"># 按 KB type 实例化 pipeline</span>
+    smart_retriever: SmartRetriever <span class="code-comment"># 跨 KB 聚合 + Rerank</span>
+    index_versioning: IndexVersioning <span class="code-comment"># 索引版本管理</span></code></pre>
+</section>
+
+<!-- ===== ⑨ 请求处理流程 ===== -->
+<section id="flow">
+  <h2><span class="num">⑨</span> 请求处理流程</h2>
+
+  <div class="flow-container" style="align-items: stretch;">
+    <div class="flow-node" style="border-color: #3b82f6;">
+      <div class="title">① 入口接收</div>
+      <div class="desc">CLI / WS / SDK 解析请求</div>
+    </div>
+    <div class="flow-arrow">▼</div>
+    <div class="flow-node" style="border-color: #3b82f6;">
+      <div class="title">② 构建 UnifiedContext</div>
+      <div class="desc">填充 session_id, history, tools, attachments</div>
+    </div>
+    <div class="flow-arrow">▼</div>
+    <div class="flow-node" style="border-color: #a78bfa;">
+      <div class="title">③ ChatOrchestrator.handle()</div>
+      <div class="desc">路由 active_capability → capability.run(context, bus)</div>
+    </div>
+    <div class="flow-arrow">▼</div>
+    <div class="flow-node" style="border-color: #f472b6;">
+      <div class="title">④ run_agentic_loop()</div>
+      <div class="desc">Label 驱动迭代：LLM call → 标签判定 → tool dispatch</div>
+    </div>
+    <div class="flow-arrow">▼</div>
+    <div class="flow-node" style="border-color: #4ade80;">
+      <div class="title">⑤ Tool Dispatcher</div>
+      <div class="desc">并行执行 tool_calls → ToolResult → 追加 messages</div>
+    </div>
+    <div class="flow-arrow">▼</div>
+    <div class="flow-node" style="border-color: #4ade80;">
+      <div class="title">⑥ Tool 执行</div>
+      <div class="desc">rag / web_search / exec / ask_user ...</div>
+    </div>
+    <div class="flow-arrow">▼</div>
+    <div class="flow-node" style="border-color: #f472b6;">
+      <div class="title">⑦ Loop 判定</div>
+      <div class="desc">Terminal? → emit_final → LoopOutcome</div>
+    </div>
+    <div class="flow-arrow">▼</div>
+    <div class="flow-node" style="border-color: #fbbf24;">
+      <div class="title">⑧ 事件推送</div>
+      <div class="desc">StreamBus 订阅者接收 → CLI 渲染 / WS 发送</div>
+    </div>
+    <div class="flow-arrow">▼</div>
+    <div class="flow-node" style="border-color: #fbbf24;">
+      <div class="title">⑨ DONE + EventBus</div>
+      <div class="desc">CAPABILITY_COMPLETE 发布到全局 EventBus</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== ⑩ 关键文件导航 ===== -->
+<section id="files">
+  <h2><span class="num">⑩</span> 关键文件导航</h2>
+
+  <h3>核心框架层</h3>
+  <div class="file-tree">
+    <div class="dir">deeptutor/</div>
+    <div style="padding-left: 20px;">
+      <div class="dir">core/</div>
+      <div style="padding-left: 40px;">
+        <div class="highlight">context.py</div> <span class="comment"># UnifiedContext 定义</span>
+        <div class="highlight">stream.py</div> <span class="comment"># StreamEvent + StreamEventType</span>
+        <div class="highlight">tool_protocol.py</div> <span class="comment"># BaseTool / ToolDefinition / ToolResult</span>
+        <div class="file">trace.py</div> <span class="comment"># Trace 元数据合并工具</span>
+        <div class="file">entry_points.py</div> <span class="comment"># 入口点注册</span>
+      </div>
+      <div class="dir">runtime/</div>
+      <div style="padding-left: 40px;">
+        <div class="highlight">orchestrator.py</div> <span class="comment"># ChatOrchestrator — 路由入口</span>
+        <div class="highlight">stream_bus.py</div> <span class="comment"># StreamBus — 异步事件通道</span>
+        <div class="highlight">turn_engine.py</div> <span class="comment"># TurnEngine — 标准执行入口</span>
+        <div class="dir">agentic/</div>
+        <div style="padding-left: 60px;">
+          <div class="highlight">loop.py</div> <span class="comment"># run_agentic_loop — 标签驱动迭代</span>
+          <div class="highlight">labeled_step.py</div> <span class="comment"># LLM 调用 + 标签解析</span>
+          <div class="file">labels.py</div> <span class="comment"># 标签常量</span>
+          <div class="file">tool_dispatch.py</div> <span class="comment"># 并行 tool 执行</span>
+          <div class="file">usage.py</div> <span class="comment"># Token 用量追踪</span>
+          <div class="file">client.py</div> <span class="comment"># Agentic LLM Client 池</span>
+        </div>
+        <div class="dir">registry/</div>
+        <div style="padding-left: 60px;">
+          <div class="highlight">tool_registry.py</div> <span class="comment"># Tool 注册表</span>
+          <div class="highlight">capability_registry.py</div> <span class="comment"># Capability 注册表</span>
+          <div class="file">deferred_tools.py</div> <span class="comment"># Deferred 工具管理</span>
+        </div>
+      </div>
+      <div class="dir">capabilities/</div>
+      <div style="padding-left: 40px;">
+        <div class="highlight">protocol.py</div> <span class="comment"># LoopExtension / KnowledgeCapability</span>
+        <div class="file">registry.py</div> <span class="comment"># Capability 注册表</span>
+        <div class="dir">solve/</div>
+        <div class="dir">mastery/</div>
+        <div class="dir">reading/</div>
+        <div class="dir">watching/</div>
+      </div>
+      <div class="dir">tools/</div>
+      <div style="padding-left: 40px;">
+        <div class="highlight">rag_tool.py</div>
+        <div class="highlight">web_search.py</div>
+        <div class="highlight">brainstorm.py</div>
+        <div class="highlight">ask_user.py</div>
+        <div class="file">exec_tool.py</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>服务层</h3>
+  <div class="file-tree">
+    <div class="dir">deeptutor/services/</div>
+    <div style="padding-left: 20px;">
+      <div class="dir">llm/</div>
+      <div style="padding-left: 40px;">
+        <div class="highlight">client.py</div> <span class="comment"># LLMClient + factory</span>
+        <div class="file">config.py</div> <span class="comment"># LLMConfig</span>
+        <div class="file">provider_factory.py</div> <span class="comment"># 多 Provider 工厂</span>
+      </div>
+      <div class="dir">rag/</div>
+      <div style="padding-left: 40px;">
+        <div class="highlight">service.py</div> <span class="comment"># RAG 服务门面</span>
+        <div class="file">factory.py</div> <span class="comment"># Pipeline 工厂</span>
+        <div class="dir">pipelines/</div>
+        <div style="padding-left: 60px;">
+          <div class="file">base.py</div> <span class="comment"># BasePipeline 抽象</span>
+          <div class="dir">llamaindex/</div>
+          <div class="dir">ima/</div>
+          <div class="dir">graphrag/</div>
+          <div class="dir">lightrag/</div>
+          <div class="dir">pageindex/</div>
+        </div>
+      </div>
+      <div class="dir">mcp/</div>
+      <div style="padding-left: 40px;">
+        <div class="file">config.py</div>
+        <div class="file">oauth.py</div>
+      </div>
+      <div class="dir">memory/</div>
+      <div style="padding-left: 40px;">
+        <div class="file">ops.py</div> <span class="comment"># 记忆读写</span>
+        <div class="file">ids.py</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>前端层</h3>
+  <div class="file-tree">
+    <div class="dir">web/</div>
+    <div style="padding-left: 20px;">
+      <div class="dir">app/</div> <span class="comment"># Next.js App Router</span>
+      <div class="dir">features/</div>
+      <div style="padding-left: 40px;">
+        <div class="dir">chat/</div> <span class="comment"># Chat UI + Trace</span>
+        <div class="dir">capabilities/</div>
+        <div class="dir">multi-user/</div>
+      </div>
+      <div class="dir">lib/</div> <span class="comment"># 核心 hooks 和工具 (~120 文件)</span>
+      <div class="dir">hooks/</div> <span class="comment"># React hooks</span>
+      <div class="dir">components/</div>
+      <div class="dir">shared/</div> <span class="comment"># 共享 UI / auth / storage</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===== ⑪ 技术栈 ===== -->
+<section id="stack">
+  <h2><span class="num">⑪</span> 技术栈</h2>
+
+  <h3>后端核心</h3>
+  <div class="tech-stack">
+    <div class="tech-item"><b>Python 3.11+</b></div>
+    <div class="tech-item"><b>FastAPI</b> — Web 框架</div>
+    <div class="tech-item"><b>Uvicorn</b> — ASGI Server</div>
+    <div class="tech-item"><b>asyncio</b> — 异步运行时</div>
+    <div class="tech-item"><b>Typer</b> — CLI 框架</div>
+    <div class="tech-item"><b>Pydantic</b> — 数据验证</div>
+    <div class="tech-item"><b>LlamaIndex</b> — 向量索引</div>
+    <div class="tech-item"><b>NumPy</b></div>
+  </div>
+
+  <h3>LLM Provider 支持</h3>
+  <div class="tech-stack">
+    <div class="tech-item"><b>OpenAI</b> (GPT-4o, o1, o3)</div>
+    <div class="tech-item"><b>Anthropic</b> (Claude)</div>
+    <div class="tech-item"><b>Azure OpenAI</b></div>
+    <div class="tech-item"><b>Google Gemini</b></div>
+    <div class="tech-item"><b>DeepSeek</b></div>
+    <div class="tech-item"><b>豆包 (Ark)</b></div>
+    <div class="tech-item"><b>SiliconFlow</b></div>
+    <div class="tech-item"><b>本地 Ollama</b></div>
+  </div>
+
+  <h3>前端</h3>
+  <div class="tech-stack">
+    <div class="tech-item"><b>Next.js 15</b> — App Router</div>
+    <div class="tech-item"><b>React 19</b></div>
+    <div class="tech-item"><b>TypeScript</b></div>
+    <div class="tech-item"><b>Tailwind CSS v4</b></div>
+    <div class="tech-item"><b>shadcn/ui</b> — 组件库</div>
+    <div class="tech-item"><b>Vitest</b> — 单元测试</div>
+    <div class="tech-item"><b>Playwright</b> — E2E 测试</div>
+    <div class="tech-item"><b>WebSocket</b> — 流式通信</div>
+  </div>
+
+  <h3>基础设施</h3>
+  <div class="tech-stack">
+    <div class="tech-item"><b>Docker</b> — 容器化</div>
+    <div class="tech-item"><b>Docker Compose</b></div>
+    <div class="tech-item"><b>GitHub Actions</b> — CI</div>
+    <div class="tech-item"><b>Redis</b> — 协调层（可选）</div>
+    <div class="tech-item"><b>Model Context Protocol</b> — 外部工具接入</div>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  DeepTutor Architecture Reference — Generated 2026<br>
+  基于源码分析，与 AGENTS.md 同步维护
+</footer>
+
+<script>
+  // Smooth scroll for nav links
+  document.querySelectorAll('.toc a').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const el = document.querySelector(a.getAttribute('href'));
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  // Active nav highlight on scroll
+  const sections = document.querySelectorAll('section');
+  const navLinks = document.querySelectorAll('.toc a');
+  window.addEventListener('scroll', () => {
+    const scrollPos = window.scrollY + 120;
+    sections.forEach((sec, i) => {
+      if (scrollPos >= sec.offsetTop && scrollPos < sec.offsetTop + sec.offsetHeight) {
+        navLinks.forEach(l => l.style.color = '');
+        if (navLinks[i]) navLinks[i].style.color = 'var(--accent)';
+      }
+    });
+  });
+</script>
+</body>
+</html>

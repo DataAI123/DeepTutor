@@ -31,7 +31,7 @@ export default function WorkspaceSettingsSection() {
     ? {
         title: 'Workspace',
         description:
-          '选择 DeepTutor 读取资料和保存生成内容的文件夹。设置、密钥、数据库和记忆不会放进这里。',
+          '选择 EnjoyLearning 读取资料和保存生成内容的文件夹。设置、密钥、数据库和记忆不会放进这里。',
         location: '当前文件夹',
         locationDescription:
           'Agent 可读取整个 Workspace；新建、下载和生成的内容默认只写入 outputs/。远程部署中的路径指服务器文件系统。',
@@ -51,7 +51,7 @@ export default function WorkspaceSettingsSection() {
     : {
         title: 'Workspace',
         description:
-          'Choose the folder DeepTutor reads from and uses for generated content. Settings, secrets, databases, and memory stay elsewhere.',
+          'Choose the folder EnjoyLearning reads from and uses for generated content. Settings, secrets, databases, and memory stay elsewhere.',
         location: 'Current folder',
         locationDescription:
           'The agent can read this workspace; new, downloaded, and generated content goes only to outputs/ by default. On a remote deployment this is a server path.',
